@@ -93,6 +93,25 @@ test('failure logging includes only an anonymized id and safe error code', async
   assert.equal(lines[0].includes('private note'), false);
 });
 
+test('credential-shaped uppercase error codes never enter maintenance logs', async () => {
+  const h = createHarness();
+  await h.apiA.createUpload({ lessonId: 'intro-01', lessonVersion: 1 });
+  h.advanceTime(day);
+  const credential = 'WX_SECRET_ACCESS_KEY_ABC123';
+  h.files.removeFailure = Object.assign(new Error('storage failed'), { code: credential });
+  const lines: string[] = [];
+  const previous = console.error;
+  console.error = (value: unknown) => { lines.push(String(value)); };
+  try {
+    assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 0, failed: 1, skipped: 0 });
+  } finally {
+    console.error = previous;
+  }
+  assert.equal(lines.length, 1);
+  assert.equal(JSON.parse(lines[0]).code, 'MAINTENANCE_FAILED');
+  assert.equal(lines[0].includes(credential), false);
+});
+
 test('commit and cleanup racing for one session have only one winner', async () => {
   const h = createHarness();
   const ticket = await h.apiA.createUpload({ lessonId: 'intro-01', lessonVersion: 1 });

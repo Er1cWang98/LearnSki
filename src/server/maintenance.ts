@@ -5,10 +5,11 @@ import { finishDeletion } from './service';
 type Upload = { state: 'issued' | 'consumed' | 'cleaning' | 'expired'; expiresAt: number; expectedFileId: string };
 type Practice = { state: 'active' | 'deleting'; ownerId: string };
 type Counts = { removed: number; failed: number; skipped: number };
+const safeErrorCodes = new Set(['CLOUD_UNAVAILABLE', 'NETWORK_ERROR', 'FILE_REMOVE_FAILED']);
 
 function logFailure(collection: string, id: string, cause: unknown): void {
   const rawCode = cause && typeof cause === 'object' && 'code' in cause ? cause.code : null;
-  const code = typeof rawCode === 'string' && /^[A-Z][A-Z0-9_]{1,39}$/.test(rawCode)
+  const code = typeof rawCode === 'string' && safeErrorCodes.has(rawCode)
     ? rawCode : 'MAINTENANCE_FAILED';
   console.error(JSON.stringify({ event: 'maintenance_failure', collection,
     idHash: createHash('sha256').update(id).digest('hex').slice(0, 16), code }));
