@@ -8,7 +8,7 @@
 .progress-count { font-size: 40rpx; font-weight: 700; color: #173044; }
 .intro-band .status-note { margin: 8rpx 0 20rpx; }
 .stage-complete { margin: 8rpx 0 18rpx; color: #0b807f; font-size: 27rpx; font-weight: 600; }
-.primary-action { display: flex; align-items: center; justify-content: center; min-height: 96rpx; margin-top: 22rpx; background: #0b807f; color: white; font-size: 30rpx; font-weight: 600; border-radius: 8rpx; }
+.primary-action { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 22rpx; background: #0b807f; color: white; font-size: 30rpx; font-weight: 600; border-radius: 8rpx; }
 .primary-action text { margin-left: 12rpx; font-size: 42rpx; line-height: 1; }
 .route-section { padding: 40rpx 32rpx 0; }
 .section-heading { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 20rpx; }

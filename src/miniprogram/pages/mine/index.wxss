@@ -11,4 +11,4 @@
 .records-empty { display: flex; flex-direction: column; align-items: center; padding: 90rpx 0 30rpx; }
 .records-icon { color: #9fb2b9; font-size: 68rpx; }
 .records-message { margin-top: 12rpx; color: #657783; font-size: 27rpx; }
-.learn-button { min-height: 88rpx; margin-top: 28rpx; padding: 0 32rpx; background: transparent; color: #0b807f; font-size: 27rpx; font-weight: 600; }
+.learn-button { min-height: 44px; margin-top: 28rpx; padding: 0 32rpx; background: transparent; color: #0b807f; font-size: 27rpx; font-weight: 600; }

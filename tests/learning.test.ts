@@ -96,3 +96,74 @@ test('configured cloud progress uses the agreed action/input wire shape', async 
     (globalThis as { wx?: unknown }).wx = previousWx;
   }
 });
+
+test('malformed success envelopes reject NETWORK_ERROR for every cloud method', async () => {
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  (globalThis as { wx?: unknown }).wx = {
+    cloud: { callFunction: async () => ({ result: { ok: true, data: null } }) },
+  };
+  try {
+    const api = createApi('env-1');
+    const calls = [
+      () => api.getProgress(),
+      () => api.createUpload({ lessonId: 'intro-01', lessonVersion: 1 }),
+      () => api.commit({ sessionId: 's', fileId: 'f', lessonVersion: 1, checkedIds: [], note: '', result: 'practicing' }),
+      () => api.listRecords({ limit: 20 }),
+      () => api.getRecord('r'),
+      () => api.getPlayback('r'),
+      () => api.deleteRecord('r'),
+    ];
+    for (const call of calls) await assert.rejects(call(), { code: 'NETWORK_ERROR' });
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});
+
+test('partial nested success data rejects NETWORK_ERROR without claiming a valid result', async () => {
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  const payloads: Record<string, unknown> = {
+    getProgress: { scope: 'account-a', progress: { completedIds: [] } },
+    createUpload: { id: 'ticket', cloudPath: 'path', expiresAt: 1 },
+    commit: { record: {}, progress: emptyProgress },
+    listRecords: { items: [{}], nextCursor: null },
+    getRecord: { id: 'record' },
+    getPlayback: { url: '', expiresAt: 1 },
+    deleteRecord: { state: 'gone' },
+  };
+  (globalThis as { wx?: unknown }).wx = {
+    cloud: { callFunction: async (request: { data: { action: string } }) => ({
+      result: { ok: true, data: payloads[request.data.action] },
+    }) },
+  };
+  try {
+    const api = createApi('env-1');
+    const calls = [
+      () => api.getProgress(),
+      () => api.createUpload({ lessonId: 'intro-01', lessonVersion: 1 }),
+      () => api.commit({ sessionId: 's', fileId: 'f', lessonVersion: 1, checkedIds: [], note: '', result: 'practicing' }),
+      () => api.listRecords({ limit: 20 }),
+      () => api.getRecord('r'),
+      () => api.getPlayback('r'),
+      () => api.deleteRecord('r'),
+    ];
+    for (const call of calls) await assert.rejects(call(), { code: 'NETWORK_ERROR' });
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});
+
+test('well-formed server failure keeps its business code and malformed failure rejects NETWORK_ERROR', async () => {
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  let result: unknown = { ok: false, error: { code: 'LESSON_LOCKED', message: '课程未解锁' } };
+  (globalThis as { wx?: unknown }).wx = {
+    cloud: { callFunction: async () => ({ result }) },
+  };
+  try {
+    const api = createApi('env-1');
+    await assert.rejects(api.getProgress(), { code: 'LESSON_LOCKED', message: '课程未解锁' });
+    result = { ok: false, error: { code: 5 } };
+    await assert.rejects(api.getProgress(), { code: 'NETWORK_ERROR' });
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});

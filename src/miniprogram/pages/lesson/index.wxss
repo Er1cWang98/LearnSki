@@ -19,7 +19,7 @@
 .criterion-row { display: flex; align-items: flex-start; gap: 18rpx; padding: 22rpx 0; line-height: 1.55; font-size: 28rpx; border-bottom: 1rpx solid #d9e2e5; }
 .criterion-box { flex: 0 0 30rpx; width: 30rpx; height: 30rpx; margin-top: 7rpx; border: 2rpx solid #82949d; border-radius: 4rpx; }
 .practice-area { margin: 50rpx 32rpx 0; text-align: center; }
-.practice-action { display: flex; align-items: center; justify-content: center; min-height: 96rpx; background: #0b807f; color: #fff; border-radius: 8rpx; font-size: 30rpx; }
+.practice-action { display: flex; align-items: center; justify-content: center; min-height: 44px; background: #0b807f; color: #fff; border-radius: 8rpx; font-size: 30rpx; }
 .practice-action[disabled] { background: #c1d1d0; color: #506876; }
 .practice-note { display: block; margin-top: 16rpx; color: #657783; font-size: 24rpx; }
 .preview-panel { display: flex; flex-direction: column; gap: 18rpx; margin: 42rpx 32rpx 0; padding: 30rpx 0; border-top: 1rpx solid #d9e2e5; }
