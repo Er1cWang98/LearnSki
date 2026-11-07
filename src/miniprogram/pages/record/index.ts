@@ -58,7 +58,10 @@ Page({
     if (this.data.view.busy) return;
     wx.showModal({ title: '删除练习记录', content: '删除这条记录和视频？已完成进度会保留。',
       confirmText: '删除', confirmColor: '#b34040', success: result => {
-        if (result.confirm) void this.controller?.remove();
+        if (result.confirm) {
+          this.pendingDeletion = true;
+          void this.controller?.remove();
+        }
       } });
   },
   retryDelete() { void this.controller?.remove(); },
