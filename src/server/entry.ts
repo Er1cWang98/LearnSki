@@ -1,3 +1,8 @@
+import { randomUUID } from 'node:crypto';
+import * as cloud from 'wx-server-sdk';
+import { createRepository } from './repository';
+import { createFileStore } from './files';
+import { createService } from './service';
 import type { CheckInApi } from './service';
 
 type Service = { forUser(ownerId: string): CheckInApi };
@@ -42,3 +47,31 @@ export async function handleRequest(event: unknown, context: Context): Promise<R
     return { ok: false, error: { code: safeCode, message } };
   }
 }
+
+function fileIdPrefix(prefix: string | undefined, env: string | undefined): string {
+  if (!env || !/^[A-Za-z0-9_-]+$/.test(env) ||
+    !prefix || !new RegExp(`^cloud://${env}\\.[A-Za-z0-9_-]+$`).test(prefix))
+    throw Object.assign(new Error('Invalid FILE_ID_PREFIX'), { code: 'CLOUD_UNAVAILABLE' });
+  return prefix;
+}
+
+export function createMain(sdk: typeof cloud, environment: NodeJS.ProcessEnv) {
+  return async (event: unknown): Promise<RpcResponse> => {
+    try {
+      sdk.init({ env: sdk.DYNAMIC_CURRENT_ENV as unknown as string });
+      const identity = sdk.getWXContext();
+      return handleRequest(event, { openid: identity.OPENID, service: {
+        forUser(ownerId) {
+          const prefix = fileIdPrefix(environment.FILE_ID_PREFIX, identity.ENV);
+          return createService({ repository: createRepository(sdk.database()),
+            files: createFileStore(sdk as unknown as Parameters<typeof createFileStore>[0]),
+            now: Date.now, randomId: randomUUID, fileIdPrefix: prefix }).forUser(ownerId);
+        },
+      } });
+    } catch {
+      return { ok: false, error: { code: 'CLOUD_UNAVAILABLE', message: '云服务暂不可用' } };
+    }
+  };
+}
+
+export const main = createMain(cloud, process.env);

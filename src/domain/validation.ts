@@ -4,6 +4,13 @@ function fail(code: string, message: string): never {
   throw Object.assign(new Error(message), { code });
 }
 
+export function validateLocalVideo(video: { path: string; bytes: number; duration: number }): void {
+  if (!video || typeof video.path !== 'string' || !video.path ||
+    !Number.isFinite(video.bytes) || video.bytes < 1 || video.bytes > 100 * 1024 * 1024 ||
+    !Number.isFinite(video.duration) || video.duration <= 0 || video.duration > 180)
+    fail('VIDEO_INVALID', '视频无效或超过大小限制');
+}
+
 export function validateCommit(lesson: Lesson, input: CommitInput): void {
   if (!input || typeof input !== 'object' || typeof input.sessionId !== 'string' || !input.sessionId ||
     typeof input.fileId !== 'string' || !input.fileId || !Array.isArray(input.checkedIds) ||

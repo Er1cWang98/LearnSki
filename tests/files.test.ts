@@ -1,0 +1,142 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { createFileStore, readVideoPrefix } from '../src/server/files';
+import { createMain, main } from '../src/server/entry';
+
+const fileId = 'cloud://env.bucket/practice/a/s1/video';
+const mp4 = Buffer.from('000000186674797069736f6d0000020069736f32', 'hex');
+
+function cloud(status = 0, url = 'https://storage.example/video') {
+  return {
+    getTempFileURL: async () => ({ fileList: [{ fileID: fileId, tempFileURL: url, maxAge: 300,
+      status, errMsg: status ? 'missing' : 'ok' }] }),
+    deleteFile: async () => ({ fileList: [{ fileID: fileId, status, errMsg: status ? 'missing' : 'ok' }] }),
+  };
+}
+
+test('inspect accepts a supported MP4 brand and trusted total length', async () => {
+  const files = createFileStore(cloud() as any, async () => ({ status: 206,
+    headers: { 'content-range': 'bytes 0-23/104857600' }, prefix: mp4 }));
+  assert.deepEqual(await files.inspect(fileId), { bytes: 104857600, video: true });
+});
+
+test('inspect accepts a long ftyp box when its first 64 bytes identify MP4', async () => {
+  const prefix = Buffer.alloc(64);
+  prefix.writeUInt32BE(100, 0);
+  prefix.write('ftyp', 4, 'ascii');
+  prefix.write('isom', 8, 'ascii');
+  const files = createFileStore(cloud() as any, async () => ({ status: 206,
+    headers: { 'content-range': 'bytes 0-63/1024' }, prefix }));
+  assert.deepEqual(await files.inspect(fileId), { bytes: 1024, video: true });
+});
+
+test('inspect rejects HTML, unsupported brands and untrusted lengths', async () => {
+  const cases = [
+    { prefix: Buffer.from('<!doctype html>'), status: 200, headers: { 'content-length': '1024' } },
+    { prefix: Buffer.from('00000018667479706261642000000200', 'hex'), status: 206,
+      headers: { 'content-range': 'bytes 0-15/1024' } },
+    { prefix: mp4, status: 200, headers: {} },
+    { prefix: mp4, status: 206, headers: { 'content-range': 'bytes 0-23/*' } },
+    { prefix: mp4, status: 206, headers: { 'content-range': 'bytes 0-23/104857601' } },
+    { prefix: mp4, status: 206, headers: { 'content-range': 'bytes 100-123/1024' } },
+    { prefix: mp4, status: 302, headers: { location: 'https://elsewhere.example' } },
+  ];
+  for (const response of cases) {
+    const files = createFileStore(cloud() as any, async () => response);
+    await assert.rejects(files.inspect(fileId), { code: 'VIDEO_INVALID' });
+  }
+});
+
+test('inspect rejects an SDK missing file and a non-HTTPS URL', async () => {
+  await assert.rejects(createFileStore(cloud(-503003) as any, async () => { throw new Error('unexpected request'); })
+    .inspect(fileId), { code: 'VIDEO_REQUIRED' });
+  await assert.rejects(createFileStore(cloud(0, 'http://storage.example/video') as any,
+    async () => { throw new Error('unexpected request'); }).inspect(fileId), { code: 'VIDEO_INVALID' });
+});
+
+test('playback requests a five minute URL and checks per-file status', async () => {
+  let options: unknown;
+  const sdk = { getTempFileURL: async (input: unknown) => {
+    options = input;
+    return cloud().getTempFileURL();
+  } };
+  const files = createFileStore(sdk as any, async () => { throw new Error('unexpected request'); }, () => 1000);
+  assert.deepEqual(await files.playback(fileId), { url: 'https://storage.example/video', expiresAt: 301000 });
+  assert.deepEqual(options, { fileList: [{ fileID: fileId, maxAge: 300 }] });
+  await assert.rejects(createFileStore(cloud(-503003) as any).playback(fileId), { code: 'NOT_FOUND' });
+});
+
+test('playback expiry honors a shorter SDK maxAge', async () => {
+  const sdk = { getTempFileURL: async () => ({ fileList: [{ fileID: fileId,
+    tempFileURL: 'https://storage.example/video', maxAge: 120, status: 0, errMsg: 'ok' }] }) };
+  const result = await createFileStore(sdk as any, undefined, () => 1000).playback(fileId);
+  assert.equal(result.expiresAt, 121000);
+});
+
+test('remove treats only the known missing-file status as idempotent', async () => {
+  await createFileStore(cloud(-503003) as any).remove(fileId);
+  await assert.rejects(createFileStore(cloud(-503002) as any).remove(fileId));
+});
+
+test('HTTP reader caps bytes and closes the response', async () => {
+  let requestOptions: any;
+  const response = new PassThrough() as PassThrough & { statusCode?: number; headers?: Record<string, string> };
+  response.statusCode = 200;
+  response.headers = { 'content-length': '1000' };
+  const get = ((_url: string, options: any, callback: (incoming: typeof response) => void) => {
+    requestOptions = options;
+    const req = new EventEmitter() as EventEmitter & { destroy: () => void };
+    req.destroy = () => {};
+    queueMicrotask(() => { callback(response); response.write(Buffer.alloc(1000, 1)); });
+    return req;
+  }) as any;
+  const result = await readVideoPrefix('https://storage.example/video', get);
+  assert.equal(result.prefix.length, 64);
+  assert.equal(response.destroyed, true);
+  assert.equal(requestOptions.headers.Range, 'bytes=0-63');
+  assert.equal(requestOptions.timeout, 10000);
+});
+
+test('HTTP reader rejects redirects without following them', async () => {
+  let calls = 0;
+  const get = ((_url: string, _options: unknown, callback: (response: any) => void) => {
+    calls++;
+    const response = new PassThrough() as PassThrough & { statusCode?: number; headers?: Record<string, string> };
+    response.statusCode = 302;
+    response.headers = { location: 'https://elsewhere.example' };
+    const req = new EventEmitter() as EventEmitter & { destroy: () => void };
+    req.destroy = () => {};
+    queueMicrotask(() => { callback(response); response.end(); });
+    return req;
+  }) as any;
+  await assert.rejects(readVideoPrefix('https://storage.example/video', get), { code: 'VIDEO_INVALID' });
+  assert.equal(calls, 1);
+});
+
+test('production handler initializes current environment and uses trusted OpenID', async () => {
+  const calls: unknown[] = [];
+  const marker = Symbol('current-env');
+  const query: any = { where() { return this; }, orderBy() { return this; }, limit() { return this; },
+    async get() { return { data: [] }; } };
+  const sdk = { DYNAMIC_CURRENT_ENV: marker, init(input: unknown) { calls.push(input); },
+    getWXContext() { return { OPENID: 'trusted-user', ENV: 'test-env' }; },
+    database() { return { collection() { return query; } }; },
+    getTempFileURL: cloud().getTempFileURL, deleteFile: cloud().deleteFile };
+  const handler = createMain(sdk as any, { FILE_ID_PREFIX: 'cloud://test-env.bucket' });
+  const result = await handler({ action: 'getProgress', input: { ownerId: 'attacker' } });
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal((result.data as any).progress.requiredDone, 0);
+  assert.deepEqual(calls, [{ env: marker }]);
+  assert.equal(typeof main, 'function');
+});
+
+test('production handler fails closed for a missing or mismatched file prefix', async () => {
+  const sdk = { DYNAMIC_CURRENT_ENV: Symbol('current-env'), init() {},
+    getWXContext() { return { OPENID: 'trusted-user', ENV: 'test-env' }; } };
+  for (const prefix of [undefined, 'cloud://other-env.bucket', 'cloud://test-env.bucket/practice']) {
+    const result = await createMain(sdk as any, { FILE_ID_PREFIX: prefix })({ action: 'getProgress', input: {} });
+    assert.deepEqual(result, { ok: false, error: { code: 'CLOUD_UNAVAILABLE', message: '云服务暂不可用' } });
+  }
+});
