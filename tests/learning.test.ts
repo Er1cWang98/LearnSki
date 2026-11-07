@@ -69,6 +69,31 @@ test('verified same-session progress remains visible but marked stale after a la
   assert.equal(toRouteView(session.state.progress, session.state.stale).notice, '进度未更新');
 });
 
+test('confirmed commit progress survives an older in-flight refresh and a later network failure', async () => {
+  let release!: (value: { scope: string; progress: Progress }) => void;
+  const pending = new Promise<{ scope: string; progress: Progress }>(resolve => { release = resolve; });
+  let calls = 0;
+  const session = createLearningSession({ getProgress: () => ++calls === 1 ? pending : Promise.reject({ code: 'NETWORK_ERROR' }) });
+  const oldRefresh = session.refresh();
+  const completed = { ...emptyProgress, completedIds: ['intro-01'], requiredDone: 1, nextLessonId: 'intro-02' };
+  session.applyConfirmed('account-a', completed);
+  release({ scope: 'account-a', progress: emptyProgress });
+  await oldRefresh;
+  assert.deepEqual(session.state.progress, completed);
+  await session.refresh();
+  assert.deepEqual(session.state.progress, completed);
+  assert.equal(session.state.stale, true);
+});
+
+test('confirmed progress from another account cannot replace the current scoped session', async () => {
+  const session = createLearningSession({ getProgress: async () => ({ scope: 'account-b', progress: emptyProgress }) });
+  await session.refresh();
+  const completed = { ...emptyProgress, completedIds: ['intro-01'], requiredDone: 1 };
+  assert.equal(session.applyConfirmed('account-a', completed), false);
+  assert.equal(session.state.scope, 'account-b');
+  assert.deepEqual(session.state.progress, emptyProgress);
+});
+
 test('every unconfigured cloud operation explicitly rejects CLOUD_UNAVAILABLE', async () => {
   const api = createApi('');
   const calls = [

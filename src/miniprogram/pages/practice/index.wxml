@@ -1,0 +1,58 @@
+<view wx:if="{{lesson}}" class="practice-page">
+  <view class="practice-header">
+    <text class="eyebrow">视频练习 · {{lesson.title}}</text>
+    <text class="practice-title">记录这次练习</text>
+  </view>
+  <view wx:if="{{unavailable}}" class="notice">课程尚未解锁或进度暂不可用</view>
+  <view wx:elif="{{loading}}" class="notice">正在读取练习…</view>
+  <block wx:elif="{{view}}">
+    <view wx:if="{{view.state.phase === 'success'}}" class="success">
+      <text class="success-title">{{view.state.result === 'selfCompleted' ? '自评完成' : '练习已保存'}}</text>
+      <text wx:if="{{view.nextTitle}}" class="success-next">新解锁：{{view.nextTitle}}</text>
+      <button wx:if="{{view.nextTitle}}" class="primary" bindtap="openNext">查看下一课</button>
+    </view>
+    <block wx:else>
+      <view class="section">
+        <text class="section-title">练习视频</text>
+        <video wx:if="{{view.state.video}}" class="video-preview" src="{{view.state.video.path}}" controls></video>
+        <text wx:elif="{{view.state.uploaded}}" class="uploaded-label">视频已上传</text>
+        <view class="media-actions">
+          <button class="secondary" disabled="{{view.busy || view.state.frozen || view.state.needsReconfirmation || view.state.versionBlocked}}" bindtap="chooseAlbum">从相册选择</button>
+          <button class="secondary" disabled="{{view.busy || view.state.frozen || view.state.needsReconfirmation || view.state.versionBlocked}}" bindtap="chooseCamera">拍摄视频</button>
+        </view>
+        <text class="hint">相册视频最长 3 分钟，最大 100 MB；拍摄最长 60 秒</text>
+        <view wx:if="{{view.state.phase === 'uploading'}}" class="upload-row">
+          <progress percent="{{view.state.percent}}" activeColor="#0b807f" backgroundColor="#d9e2e5" stroke-width="6"></progress>
+          <text>{{view.state.percent}}%</text>
+          <button class="link-action" bindtap="cancelUpload">取消上传</button>
+        </view>
+        <text wx:if="{{view.state.phase === 'selecting'}}" class="hint">正在选择视频…</text>
+        <button wx:if="{{view.state.video && !view.state.uploaded && view.state.phase === 'editing' && !view.state.frozen && !view.state.versionBlocked && !view.state.needsReconfirmation}}" class="secondary retry" bindtap="retryUpload">重新上传</button>
+      </view>
+      <view class="section">
+        <text class="section-title">自查清单</text>
+        <button wx:for="{{view.criteria}}" wx:key="id" class="criterion" data-id="{{item.id}}" disabled="{{view.busy || view.state.frozen || view.state.versionBlocked}}" bindtap="toggleCriterion">
+          <text class="check {{item.checked ? 'checked' : ''}}" aria-hidden="true">{{item.checked ? '✓' : ''}}</text>
+          <text class="criterion-text">{{item.text}}</text>
+        </button>
+        <button wx:if="{{view.state.needsReconfirmation}}" class="secondary confirm-rubric" bindtap="confirmRubric">已确认新版自查项</button>
+      </view>
+      <view class="section">
+        <view class="note-heading"><text class="section-title">练习心得</text><text>{{view.noteLength}} / 500</text></view>
+        <textarea class="note" value="{{view.state.note}}" maxlength="-1" disabled="{{view.busy || view.state.frozen}}" bindinput="editNote" placeholder="记录动作感受与下次调整" auto-height></textarea>
+      </view>
+      <view wx:if="{{view.errorText}}" class="error">{{view.errorText}}</view>
+      <view wx:if="{{view.state.versionBlocked}}" class="actions"><button class="secondary" bindtap="backToLesson">返回课程</button></view>
+      <view wx:elif="{{view.state.frozen && view.state.phase === 'editing'}}" class="actions">
+        <button class="primary" bindtap="retrySubmit">重试提交</button>
+        <button class="secondary" bindtap="beginEdit">修改练习</button>
+      </view>
+      <view wx:else class="actions">
+        <button class="secondary" disabled="{{!view.canSave}}" bindtap="savePractice">保存练习</button>
+        <button class="primary" disabled="{{!view.canComplete}}" bindtap="completePractice">自评完成</button>
+      </view>
+      <text wx:if="{{view.state.phase === 'submitting'}}" class="hint submit-hint">正在确认提交结果…</text>
+    </block>
+  </block>
+</view>
+<view wx:else class="invalid-page">未找到这门课程</view>

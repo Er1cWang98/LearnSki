@@ -2,6 +2,7 @@
   "pages": [
     "pages/learn/index",
     "pages/lesson/index",
+    "pages/practice/index",
     "pages/mine/index"
   ],
   "window": {

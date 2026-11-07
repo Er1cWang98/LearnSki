@@ -31,7 +31,7 @@
       <text class="section-title">自查清单</text>
       <view wx:for="{{lesson.criteria}}" wx:key="id" class="criterion-row"><text class="criterion-box" aria-hidden="true"></text><text>{{item.text}}</text></view>
     </view>
-    <view class="practice-area"><button class="practice-action" disabled="{{true}}">{{view.actionLabel}}</button><text class="practice-note">练习打卡暂不可用</text></view>
+    <view class="practice-area"><button class="practice-action" bindtap="openPractice">{{view.actionLabel}}</button></view>
   </block>
   <view wx:else class="preview-panel">
     <text class="section-title">课程预览</text>

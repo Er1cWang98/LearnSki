@@ -30,4 +30,10 @@ Page({
     const state = await session.refresh();
     this.setData({ view: toLessonView(lesson, state.progress), notice: state.progress === null ? '进度暂不可用' : state.stale ? '进度未更新' : '' });
   },
+  openPractice() {
+    const lesson = this.data.lesson;
+    const view = this.data.view;
+    if (!lesson || !view?.showFullContent) return;
+    wx.navigateTo({ url: `/pages/practice/index?id=${encodeURIComponent(lesson.id)}` });
+  },
 });

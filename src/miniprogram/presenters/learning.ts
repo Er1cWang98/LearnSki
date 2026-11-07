@@ -66,6 +66,12 @@ export function createLearningSession(api: Pick<LearningApi, 'getProgress'>) {
   let requestNumber = 0;
   return {
     get state(): LearningSessionState { return state; },
+    applyConfirmed(scope: string | null, progress: Progress): boolean {
+      if (!scope || (state.scope && state.scope !== scope)) return false;
+      ++requestNumber;
+      state = { scope, progress, stale: false };
+      return true;
+    },
     async refresh(): Promise<LearningSessionState> {
       const currentRequest = ++requestNumber;
       try {

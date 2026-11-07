@@ -2,6 +2,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createService } from '../../src/server/service';
 import type { FileStore, Repository, Transaction } from '../../src/server/repository';
 import type { Completion, PracticeRecord } from '../../src/domain/types';
+import { getLesson } from '../../src/catalog/intro';
+import { createPracticeController } from '../../src/miniprogram/presenters/practice';
+import type { PracticeDraft } from '../../src/miniprogram/services/drafts';
 
 type Stored = { ownerId?: string; lessonId?: string; createdAt?: number; expiresAt?: number; state?: string; deletionRequestedAt?: number };
 
@@ -110,4 +113,57 @@ export async function completeFirstLesson(h: ReturnType<typeof createHarness>): 
   return (await h.apiA.commit({ sessionId: ticket.id, fileId: ticket.expectedFileId,
     lessonVersion: 1, checkedIds: ['intro-01-name', 'intro-01-check'], note: '',
     result: 'selfCompleted' })).record;
+}
+
+export function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+export function createPracticeHarness() {
+  const server = createHarness();
+  const lesson = getLesson('intro-01');
+  const commitGate = deferred<void>();
+  const commitStarted = deferred<void>();
+  const stored = new Map<string, PracticeDraft>();
+  const commits: string[] = [];
+  const states: Array<ReturnType<ReturnType<typeof createPracticeController>['getState']>> = [];
+  let phaseWaiters: Array<{ phase: string; resolve: () => void }> = [];
+  const media = {
+    selectVideo: async () => ({ path: 'wxfile://clip.mp4', bytes: 1024, duration: 10 }),
+    startUpload: (ticket: { expectedFileId: string }, _video: unknown, onProgress: (value: number) => void) => {
+      server.files.put(ticket.expectedFileId, { bytes: 1024, video: true });
+      onProgress(100);
+      return { promise: Promise.resolve(ticket.expectedFileId), abort() {} };
+    },
+  };
+  const api = {
+    createUpload: server.apiA.createUpload,
+    commit: async (input: Parameters<typeof server.apiA.commit>[0]) => {
+      commits.push(input.sessionId);
+      commitStarted.resolve();
+      await commitGate.promise;
+      return server.apiA.commit(input);
+    },
+  };
+  const drafts = {
+    load: async (scope: string | null, lessonId: string) => stored.get(`${scope}:${lessonId}`) ?? null,
+    save: async (scope: string | null, lessonId: string, draft: PracticeDraft) => { stored.set(`${scope}:${lessonId}`, structuredClone(draft)); },
+    remove: async (scope: string | null, lessonId: string) => { stored.delete(`${scope}:${lessonId}`); },
+  };
+  const controller = createPracticeController({ api, media, drafts, lesson, scope: 'scope-a', onChange(state) {
+    states.push(state);
+    const matching = phaseWaiters.filter(waiter => waiter.phase === state.phase);
+    phaseWaiters = phaseWaiters.filter(waiter => waiter.phase !== state.phase);
+    matching.forEach(waiter => waiter.resolve());
+  } });
+  return { controller, server, drafts, stored, commits, states, media, api,
+    state: () => controller.getState(),
+    untilPhase: (phase: string) => states.some(state => state.phase === phase)
+      ? Promise.resolve() : new Promise<void>(resolve => phaseWaiters.push({ phase, resolve })),
+    resolveCommit: () => commitGate.resolve(),
+    untilCommit: () => commitStarted.promise,
+  };
 }

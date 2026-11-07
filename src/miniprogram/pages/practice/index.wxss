@@ -1,0 +1,37 @@
+.practice-page { padding-bottom: calc(48rpx + env(safe-area-inset-bottom)); }
+.practice-header { padding: 42rpx 32rpx; background: #e9f0f0; }
+.practice-title { display: block; margin-top: 12rpx; font-size: 42rpx; line-height: 1.35; font-weight: 700; }
+.section { margin: 34rpx 32rpx 0; }
+.section-title { display: block; margin-bottom: 20rpx; font-size: 31rpx; font-weight: 700; }
+.video-preview { width: 100%; height: 380rpx; background: #dfe8e9; }
+.uploaded-label { display: block; padding: 28rpx 0; color: #0b807f; }
+.media-actions, .actions { display: flex; gap: 16rpx; }
+.media-actions { margin-top: 22rpx; }
+.media-actions button, .actions button { flex: 1; min-width: 0; }
+button { display: flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; border-radius: 8rpx; font-size: 27rpx; line-height: 1.4; padding: 14rpx 16rpx; }
+button::after { border: 0; }
+.primary { color: #fff; background: #0b807f; }
+.secondary { color: #0b6868; background: #e1eeee; }
+button[disabled] { color: #66777d; background: #dbe2e3; }
+.hint { display: block; margin-top: 16rpx; color: #657783; font-size: 24rpx; line-height: 1.5; }
+.upload-row { display: flex; align-items: center; gap: 16rpx; margin-top: 22rpx; }
+.upload-row progress { flex: 1; }
+.link-action { flex: 0 0 auto; color: #0b6868; background: transparent; }
+.retry { margin-top: 18rpx; }
+.criterion { width: 100%; justify-content: flex-start; gap: 18rpx; margin: 0; padding: 18rpx 0; border-bottom: 1rpx solid #d9e2e5; background: transparent; text-align: left; }
+.criterion[disabled] { background: transparent; }
+.check { display: flex; align-items: center; justify-content: center; flex: 0 0 34rpx; width: 34rpx; height: 34rpx; border: 2rpx solid #82949d; border-radius: 4rpx; color: #fff; font-size: 24rpx; }
+.check.checked { background: #0b807f; border-color: #0b807f; }
+.criterion-text { flex: 1; white-space: normal; font-size: 27rpx; line-height: 1.5; }
+.confirm-rubric { width: 100%; margin-top: 22rpx; }
+.note-heading { display: flex; align-items: center; justify-content: space-between; color: #657783; font-size: 24rpx; }
+.note-heading .section-title { color: #172c35; }
+.note { box-sizing: border-box; width: 100%; min-height: 180rpx; padding: 20rpx; border: 1rpx solid #ccd9dc; border-radius: 8rpx; background: #fff; font-size: 27rpx; line-height: 1.6; }
+.error { margin: 28rpx 32rpx 0; padding: 20rpx; color: #9a402c; background: #fff0e9; font-size: 25rpx; line-height: 1.5; }
+.actions { margin: 38rpx 32rpx 0; }
+.submit-hint { margin: 18rpx 32rpx 0; text-align: center; }
+.success { margin: 56rpx 32rpx; text-align: center; }
+.success-title { display: block; font-size: 42rpx; font-weight: 700; color: #0b807f; }
+.success-next { display: block; margin-top: 24rpx; color: #405b68; font-size: 28rpx; }
+.success button { margin-top: 32rpx; }
+.notice, .invalid-page { padding: 60rpx 32rpx; color: #657783; text-align: center; }
