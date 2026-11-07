@@ -27,19 +27,31 @@ Page({
   controller: null as Controller | null,
   epoch: 0,
   recordId: '',
+  pendingDeletion: false,
   data: { view: detailView({ phase: 'loading', record: null, playbackUrl: '', playbackError: false,
     error: null, busy: false }) },
-  onLoad(query: Record<string, string | undefined>) { this.recordId = query.id ?? ''; },
+  onLoad(query: Record<string, string | undefined>) {
+    this.recordId = query.id ?? '';
+    this.pendingDeletion = false;
+  },
   async onShow() {
     const epoch = ++this.epoch;
     this.controller = createRecordDetailController(api, state => {
-      if (epoch === this.epoch) this.setData({ view: detailView(state) });
+      if (epoch === this.epoch) {
+        if (state.phase === 'deleting') this.pendingDeletion = true;
+        if (state.phase === 'deleted') this.pendingDeletion = false;
+        this.setData({ view: detailView(state) });
+      }
     });
-    await this.controller.load(this.recordId);
+    if (this.pendingDeletion) await this.controller.resumeDeletion(this.recordId);
+    else await this.controller.load(this.recordId);
   },
   onHide() { ++this.epoch; this.controller = null; },
   onUnload() { ++this.epoch; this.controller = null; },
-  retryLoad() { void this.controller?.load(this.recordId); },
+  retryLoad() {
+    if (this.pendingDeletion) void this.controller?.resumeDeletion(this.recordId);
+    else void this.controller?.load(this.recordId);
+  },
   videoError() { void this.controller?.videoError(); },
   retryPlayback() { void this.controller?.retryPlayback(); },
   confirmDelete() {

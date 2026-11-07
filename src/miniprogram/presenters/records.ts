@@ -136,5 +136,18 @@ export function createRecordDetailController(api: DetailApi, onChange?: (state: 
       return null;
     }
   }
-  return { getState: () => ({ ...state }), load, videoError, retryPlayback, remove };
+  async function resumeDeletion(id: string) {
+    const request = ++generation;
+    recordId = id;
+    publish({ phase: 'loading', record: null, playbackUrl: '', playbackError: false, error: null, busy: true });
+    try {
+      const result = await api.deleteRecord(id);
+      if (request === generation) publish({ phase: result.state, busy: false });
+      return result;
+    } catch (error) {
+      if (request === generation) publish({ phase: 'error', busy: false, error: errorCode(error) });
+      return null;
+    }
+  }
+  return { getState: () => ({ ...state }), load, videoError, retryPlayback, remove, resumeDeletion };
 }
