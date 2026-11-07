@@ -198,12 +198,17 @@
 
 ## 10. 技术资料核对
 
-2026-11-06 尝试检索腾讯官方资料，但本次网页工具未返回可核对的正文。以下为实施时需核对的官方资料入口，不作为已验证接口的依据：
+2026-11-06 的网页检索没有返回可核对正文；2026-11-07 实施阶段补充了以下不同层级的证据，不能把源码/文档阅读等同于目标环境验收：
 
-- 腾讯云云存储权限资料入口：`https://intl.cloud.tencent.com/zh/document/product/1266/71670`。核对微信身份归属规则及管理侧访问的权限边界。
-- 腾讯云数据库资料入口：`https://cloud.tencent.com/document/product/876/19369`。核对服务端写入记录时的所有者字段行为。
+| 来源类型 | 核对内容 | 仍需现场验证 |
+|---|---|---|
+| 已获取的官方文档：`https://docs.cloudbase.net/storage/security-rules` | 页面返回 HTTP 200，包含 `resource.openid == auth.openid` 所有者规则；文档区分传统模式与 PG 模式，本项目部署指导选择传统文档数据库/存储 | 目标控制台规则解析、云文件所有者、双账号读写结果 |
+| 已获取的官方文档：`https://docs.cloudbase.net/cloud-function/timer-trigger` 与 `https://docs.cloudbase.net/cloud-function/function-configuration/env` | 前者包含云函数 `config.json` 定时触发器配置，后者列出定时触发来源 `TRIGGER_SRC` | 另行上传触发器后的实际事件字段和运行时环境变量，不以手工设置 `TRIGGER_SRC` 代替平台身份 |
+| 已获取的官方文档：`https://docs.cloudbase.net/database/data-index` | 提供数据索引与复合索引配置说明 | 目标控制台是否接受含 `_id` 的各组复合索引、查询排序实际表现 |
+| 官方仓库类型定义：`https://raw.githubusercontent.com/wechat-miniprogram/api-typings/master/types/wx/lib.wx.api.d.ts` 与 `lib.wx.cloud.d.ts` | 计划阶段核对过媒体选择限制说明及 `uploadFile` 重载；目前安装的 `miniprogram-api-typings@5.2.3` 用于本地类型检查 | 目标基础库中的相册时长、拍摄时长、进度/取消能力 |
+| 已安装 SDK 源码：`node_modules/wx-server-sdk@4.0.2` 与其 `@cloudbase/database` 依赖 | 代码和本地测试核对了交易回调返回、临时地址与逐文件删除状态；`npm ci` 报 6 项依赖告警 | 云端实际文件 Range 响应、前缀/权限行为，以及安全更新的 SDK 级兼容性 |
 
-实施计划需要先核对媒体选择、上传、文件元信息及播放接口，再确定调用代码与 SDK 版本。本文规定的是目标行为，未宣称具体上传接口和限制已完成平台验证。
+本地 `esbuild` 与补充的 `miniprogram-compiler@0.2.3` WXML/WXSS 编译只证明相应本地构建步骤完成；开发者工具、目标基础库、云环境和真机行为须按 `docs/acceptance.md` 实测。上述官方页面是部署依据，不是规则已在控制台生效的证据。
 
 ## 11. 设计自检
 
