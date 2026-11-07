@@ -5,6 +5,7 @@ import { createPracticeHarness } from './helpers/fakes';
 import { deferred } from './helpers/fakes';
 import { createPracticeController } from '../src/miniprogram/presenters/practice';
 import { createDraftStore } from '../src/miniprogram/services/drafts';
+import type { CommitInput } from '../src/domain/types';
 
 test('commit stays pending until the server confirms and duplicate taps share it', async () => {
   const h = createPracticeHarness();
@@ -265,4 +266,88 @@ test('cancel while saving a selected video prevents a stale upload ticket reques
   saving.resolve();
   await choosing;
   assert.equal(tickets, 0);
+});
+
+test('draft write failure before commit restores editing and retries the exact frozen submission', async () => {
+  const h = createPracticeHarness();
+  await h.controller.ready;
+  await h.controller.choose('album');
+  h.controller.setNote('原始心得');
+  h.controller.setChecked(['intro-01-name']);
+  const originalSession = h.stored.get('scope-a:intro-01')?.ticket?.id;
+  const originalFileId = h.stored.get('scope-a:intro-01')?.fileId;
+  const originalSave = h.drafts.save;
+  let failed = false;
+  h.drafts.save = async (scope, lessonId, draft) => {
+    if (draft.snapshot && !failed) { failed = true; throw new Error('storage full'); }
+    await originalSave(scope, lessonId, draft);
+  };
+  await h.controller.submit('practicing');
+  assert.equal(h.state().phase, 'editing');
+  assert.equal(h.state().frozen, true);
+  assert.equal(h.state().error, 'DRAFT_SAVE_FAILED');
+  assert.equal(h.commits.length, 0);
+  h.controller.setNote('must not replace snapshot');
+  const committed: CommitInput[] = [];
+  const originalCommit = h.api.commit;
+  h.api.commit = async input => { committed.push(structuredClone(input)); return originalCommit(input); };
+  h.resolveCommit();
+  await h.controller.submit('selfCompleted');
+  assert.equal(h.state().phase, 'success');
+  assert.equal(h.commits.length, 1);
+  assert.equal(committed[0]?.sessionId, originalSession);
+  assert.equal(committed[0]?.fileId, originalFileId);
+  assert.equal(committed[0]?.lessonVersion, 1);
+  assert.equal(committed[0]?.note, '原始心得');
+  assert.deepEqual(committed[0]?.checkedIds, ['intro-01-name']);
+  assert.equal(committed[0]?.result, 'practicing');
+  assert.equal(h.state().result, 'practicing');
+  assert.equal(h.state().recordId !== null, true);
+});
+
+test('autosave and disposal failures do not throw or leave an unhandled rejection', async () => {
+  const h = createPracticeHarness();
+  await h.controller.ready;
+  h.drafts.save = () => { throw new Error('storage unavailable'); };
+  assert.doesNotThrow(() => h.controller.setNote('保留在内存'));
+  await Promise.resolve();
+  assert.equal(h.state().note, '保留在内存');
+  assert.equal(h.state().error, 'DRAFT_SAVE_FAILED');
+  await assert.doesNotReject(h.controller.dispose());
+});
+
+test('draft write failure after selecting a file prevents upload and keeps the selection actionable', async () => {
+  const h = createPracticeHarness();
+  await h.controller.ready;
+  const originalSave = h.drafts.save;
+  let failed = false;
+  h.drafts.save = async (scope, lessonId, draft) => {
+    if (draft.video && !failed) { failed = true; throw new Error('storage full'); }
+    await originalSave(scope, lessonId, draft);
+  };
+  let tickets = 0;
+  const originalCreate = h.api.createUpload;
+  h.api.createUpload = async input => { tickets += 1; return originalCreate(input); };
+  await h.controller.choose('album');
+  assert.equal(h.state().phase, 'editing');
+  assert.equal(h.state().error, 'DRAFT_SAVE_FAILED');
+  assert.equal(h.state().video?.path, 'wxfile://clip.mp4');
+  assert.equal(tickets, 0);
+  await h.controller.retryUpload();
+  assert.equal(h.state().uploaded, true);
+});
+
+test('failed draft restoration blocks a fresh upload and leaves cleanup nonrejecting', async () => {
+  const h = createPracticeHarness();
+  h.drafts.load = async () => { throw new Error('storage read failed'); };
+  let requests = 0;
+  h.api.createUpload = async () => { requests += 1; throw new Error('unexpected'); };
+  const controller = createPracticeController({ api: h.api, media: h.media, drafts: h.drafts,
+    lesson: getLesson('intro-01'), scope: 'scope-a', onChange() {} });
+  await controller.ready;
+  assert.equal(controller.getState().error, 'DRAFT_LOAD_FAILED');
+  await controller.choose('album');
+  assert.equal(requests, 0);
+  assert.equal(controller.getState().video, null);
+  await assert.doesNotReject(controller.dispose());
 });

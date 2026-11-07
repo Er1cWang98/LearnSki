@@ -17,8 +17,8 @@
         <video wx:if="{{view.state.video}}" class="video-preview" src="{{view.state.video.path}}" controls></video>
         <text wx:elif="{{view.state.uploaded}}" class="uploaded-label">视频已上传</text>
         <view class="media-actions">
-          <button class="secondary" disabled="{{view.busy || view.state.frozen || view.state.needsReconfirmation || view.state.versionBlocked}}" bindtap="chooseAlbum">从相册选择</button>
-          <button class="secondary" disabled="{{view.busy || view.state.frozen || view.state.needsReconfirmation || view.state.versionBlocked}}" bindtap="chooseCamera">拍摄视频</button>
+          <button class="secondary" disabled="{{view.busy || view.state.frozen || view.state.needsReconfirmation || view.state.versionBlocked || view.state.error === 'DRAFT_LOAD_FAILED'}}" bindtap="chooseAlbum">从相册选择</button>
+          <button class="secondary" disabled="{{view.busy || view.state.frozen || view.state.needsReconfirmation || view.state.versionBlocked || view.state.error === 'DRAFT_LOAD_FAILED'}}" bindtap="chooseCamera">拍摄视频</button>
         </view>
         <text class="hint">相册视频最长 3 分钟，最大 100 MB；拍摄最长 60 秒</text>
         <view wx:if="{{view.state.phase === 'uploading'}}" class="upload-row">
@@ -31,7 +31,7 @@
       </view>
       <view class="section">
         <text class="section-title">自查清单</text>
-        <button wx:for="{{view.criteria}}" wx:key="id" class="criterion" data-id="{{item.id}}" disabled="{{view.busy || view.state.frozen || view.state.versionBlocked}}" bindtap="toggleCriterion">
+        <button wx:for="{{view.criteria}}" wx:key="id" class="criterion" data-id="{{item.id}}" disabled="{{view.busy || view.state.frozen || view.state.versionBlocked || view.state.error === 'DRAFT_LOAD_FAILED'}}" bindtap="toggleCriterion">
           <text class="check {{item.checked ? 'checked' : ''}}" aria-hidden="true">{{item.checked ? '✓' : ''}}</text>
           <text class="criterion-text">{{item.text}}</text>
         </button>
@@ -39,10 +39,10 @@
       </view>
       <view class="section">
         <view class="note-heading"><text class="section-title">练习心得</text><text>{{view.noteLength}} / 500</text></view>
-        <textarea class="note" value="{{view.state.note}}" maxlength="-1" disabled="{{view.busy || view.state.frozen}}" bindinput="editNote" placeholder="记录动作感受与下次调整" auto-height></textarea>
+        <textarea class="note" value="{{view.state.note}}" maxlength="-1" disabled="{{view.busy || view.state.frozen || view.state.error === 'DRAFT_LOAD_FAILED'}}" bindinput="editNote" placeholder="记录动作感受与下次调整" auto-height></textarea>
       </view>
       <view wx:if="{{view.errorText}}" class="error">{{view.errorText}}</view>
-      <view wx:if="{{view.state.versionBlocked}}" class="actions"><button class="secondary" bindtap="backToLesson">返回课程</button></view>
+      <view wx:if="{{view.state.versionBlocked || view.state.error === 'DRAFT_LOAD_FAILED'}}" class="actions"><button class="secondary" bindtap="backToLesson">返回课程</button></view>
       <view wx:elif="{{view.state.frozen && view.state.phase === 'editing'}}" class="actions">
         <button class="primary" bindtap="retrySubmit">重试提交</button>
         <button class="secondary" bindtap="beginEdit">修改练习</button>

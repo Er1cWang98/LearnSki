@@ -47,10 +47,25 @@ export function createPracticeController(options: {
   const draft = (): PracticeDraft => ({ lessonVersion: lesson.version, checkedIds: [...state.checkedIds], note: state.note,
     video: state.video, ticket, fileId, snapshot, versionBlocked: state.versionBlocked,
     needsReconfirmation: state.needsReconfirmation });
-  const save = () => Promise.resolve(drafts.save(scope, lesson.id, draft()));
+  const save = async (): Promise<boolean> => {
+    try {
+      await drafts.save(scope, lesson.id, draft());
+      return true;
+    } catch { return false; }
+  };
+  const saveInBackground = () => {
+    void save().then(saved => {
+      if (!saved && !disposed && state.phase === 'editing') change({ error: 'DRAFT_SAVE_FAILED' });
+    });
+  };
   const code = (error: unknown) => (error as { code?: string })?.code ?? 'NETWORK_ERROR';
   const ready = (async () => {
-    const loaded = await drafts.load(scope, lesson.id);
+    let loaded: PracticeDraft | null;
+    try { loaded = await drafts.load(scope, lesson.id); }
+    catch {
+      if (!disposed) change({ error: 'DRAFT_LOAD_FAILED' });
+      return;
+    }
     if (disposed) return;
     initialized = true;
     if (!loaded) return;
@@ -62,7 +77,7 @@ export function createPracticeController(options: {
       note: loaded.note, video: loaded.video, versionBlocked: versionChanged ? false : !!loaded.versionBlocked,
       needsReconfirmation: versionChanged || !!loaded.needsReconfirmation,
       error: versionChanged ? 'RUBRIC_RECONFIRM' : null, frozen: !!snapshot, uploaded: !!fileId });
-    if (versionChanged) await save();
+    if (versionChanged && !(await save()) && !disposed) change({ error: 'DRAFT_SAVE_FAILED' });
   })();
   emit();
 
@@ -73,7 +88,10 @@ export function createPracticeController(options: {
       const created = await api.createUpload({ lessonId: lesson.id, lessonVersion: lesson.version });
       if (!active(id)) return;
       ticket = created;
-      await save();
+      if (!(await save())) {
+        if (active(id)) change({ phase: 'editing', error: 'DRAFT_SAVE_FAILED' });
+        return;
+      }
       if (!active(id)) return;
       const current = media.startUpload(created, video, percent => {
         if (active(id) && state.phase === 'uploading') change({ percent });
@@ -84,19 +102,19 @@ export function createPracticeController(options: {
       fileId = uploadedId;
       handle = null;
       change({ phase: 'editing', percent: 100, uploaded: true });
-      await save();
+      if (!(await save()) && active(id)) change({ error: 'DRAFT_SAVE_FAILED' });
     } catch (error) {
       if (!active(id)) return;
       handle = null;
       const errorCode = code(error);
       change({ phase: 'editing', error: errorCode, versionBlocked: errorCode === 'VERSION_CHANGED' });
-      await save();
+      if (!(await save()) && active(id)) change({ error: 'DRAFT_SAVE_FAILED' });
     }
   }
 
   async function choose(source: 'album' | 'camera') {
     await ready;
-    if (disposed || state.phase === 'submitting' || state.phase === 'success' || state.needsReconfirmation || state.versionBlocked) return;
+    if (disposed || !initialized || state.phase === 'submitting' || state.phase === 'success' || state.needsReconfirmation || state.versionBlocked) return;
     const id = ++generation;
     handle?.abort();
     handle = null;
@@ -108,7 +126,10 @@ export function createPracticeController(options: {
       ticket = null; fileId = null; snapshot = null;
       change({ video, phase: scope ? 'uploading' : 'editing', percent: 0, frozen: false, uploaded: false,
         error: scope ? null : 'CLOUD_UNAVAILABLE' });
-      await save();
+      if (!(await save())) {
+        if (active(id)) change({ phase: 'editing', error: 'DRAFT_SAVE_FAILED' });
+        return;
+      }
       if (scope && active(id)) await upload(video, id);
     } catch (error) {
       if (!active(id)) return;
@@ -118,7 +139,7 @@ export function createPracticeController(options: {
 
   async function retryUpload() {
     await ready;
-    if (disposed || state.phase !== 'editing' || !state.video || state.versionBlocked || state.needsReconfirmation) return;
+    if (disposed || !initialized || state.phase !== 'editing' || !state.video || state.versionBlocked || state.needsReconfirmation) return;
     if (!scope) { change({ error: 'CLOUD_UNAVAILABLE' }); return; }
     const id = ++generation;
     ticket = null; fileId = null; snapshot = null;
@@ -133,41 +154,41 @@ export function createPracticeController(options: {
     handle = null;
     ticket = null; fileId = null; snapshot = null;
     change({ phase: 'editing', error: null, percent: 0, frozen: false, uploaded: false });
-    void save();
+    saveInBackground();
   }
 
   function setChecked(ids: string[]) {
-    if (disposed || state.phase !== 'editing' || snapshot) return;
+    if (disposed || !initialized || state.phase !== 'editing' || snapshot) return;
     const valid = new Set(lesson.criteria.map(item => item.id));
     change({ checkedIds: [...new Set(ids)].filter(id => valid.has(id)), error: null });
-    void save();
+    saveInBackground();
   }
 
   function setNote(note: string) {
-    if (disposed || state.phase !== 'editing' || snapshot) return;
+    if (disposed || !initialized || state.phase !== 'editing' || snapshot) return;
     change({ note: [...note].slice(0, 500).join(''), error: null });
-    void save();
+    saveInBackground();
   }
 
   function beginEdit() {
-    if (disposed || state.phase !== 'editing' || !snapshot) return;
+    if (disposed || !initialized || state.phase !== 'editing' || !snapshot) return;
     ++generation;
     ticket = null; fileId = null; snapshot = null;
     change({ error: null, percent: 0, frozen: false, uploaded: false });
-    void save();
+    saveInBackground();
   }
 
   function confirmRubric() {
-    if (disposed || state.versionBlocked || !state.needsReconfirmation || state.phase !== 'editing') return;
+    if (disposed || !initialized || state.versionBlocked || !state.needsReconfirmation || state.phase !== 'editing') return;
     change({ needsReconfirmation: false, error: null });
-    void save();
+    saveInBackground();
   }
 
   function submit(result: Outcome): Promise<void> {
     if (pendingSubmit) return pendingSubmit;
     pendingSubmit = (async () => {
       await ready;
-      if (disposed || state.phase !== 'editing' || state.versionBlocked) return;
+      if (disposed || !initialized || state.phase !== 'editing' || state.versionBlocked) return;
       if (state.needsReconfirmation) { change({ error: 'RUBRIC_RECONFIRM' }); return; }
       if (!scope) { change({ error: 'CLOUD_UNAVAILABLE' }); return; }
       if (!snapshot) {
@@ -180,7 +201,10 @@ export function createPracticeController(options: {
       }
       const id = generation;
       change({ phase: 'submitting', error: null, frozen: true });
-      await save();
+      if (!(await save())) {
+        if (active(id)) change({ phase: 'editing', error: 'DRAFT_SAVE_FAILED' });
+        return;
+      }
       if (!active(id)) return;
       try {
         const confirmed = await api.commit(snapshot);
@@ -193,7 +217,7 @@ export function createPracticeController(options: {
         if (!active(id)) return;
         const errorCode = code(error);
         change({ phase: 'editing', error: errorCode, versionBlocked: errorCode === 'VERSION_CHANGED' });
-        await save();
+        if (!(await save()) && active(id)) change({ error: 'DRAFT_SAVE_FAILED' });
       }
     })().finally(() => { pendingSubmit = null; });
     return pendingSubmit;

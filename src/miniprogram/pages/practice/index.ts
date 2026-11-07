@@ -28,6 +28,8 @@ const messages: Record<string, string> = {
   VERSION_CHANGED: '课程内容已更新，请重新打开课程确认自查项',
   RUBRIC_RECONFIRM: '课程内容已更新，请重新确认自查项',
   LESSON_LOCKED: '请先完成前置课程',
+  DRAFT_SAVE_FAILED: '本机草稿保存失败，请检查存储空间后重试',
+  DRAFT_LOAD_FAILED: '本机草稿读取失败，请重新打开页面',
 };
 
 function display(state: PracticeState, lesson: Lesson) {
