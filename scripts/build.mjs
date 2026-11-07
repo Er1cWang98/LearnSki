@@ -3,12 +3,14 @@ import { existsSync } from 'node:fs';
 import { cp, lstat, mkdir, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readCloudConfig } from './cloud-config.mjs';
 
 const root = await realpath(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
 const dist = resolve(root, 'dist');
 const miniSource = join(root, 'src', 'miniprogram');
 const miniOutput = join(dist, 'miniprogram');
 const serverSource = join(root, 'src', 'server');
+const cloudConfig = await readCloudConfig(root);
 
 if (dirname(dist) !== root) throw new Error('Invalid dist path');
 if (existsSync(dist)) {
@@ -41,12 +43,21 @@ for (const file of await walk(miniSource)) {
       platform: 'browser',
       target: 'es2018',
       format: 'cjs',
+      define: { __CLOUD_ENV_ID__: JSON.stringify(cloudConfig.envId) },
     });
   } else if (/\.(json|wxml|wxss)$/.test(file)) {
     await mkdir(dirname(destination), { recursive: true });
     await cp(file, destination);
   }
 }
+
+await writeFile(join(dist, 'project.config.json'), JSON.stringify({
+  appid: cloudConfig.appId,
+  projectname: '单板滑雪学习',
+  compileType: 'miniprogram',
+  miniprogramRoot: 'miniprogram/',
+  cloudfunctionRoot: 'cloudfunctions/',
+}, null, 2) + '\n');
 
 for (const [name, entry] of [
   ['learning', 'entry.ts'],

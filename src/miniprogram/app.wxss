@@ -1,0 +1,13 @@
+page {
+  background: #f3f6f7;
+  color: #173044;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 30rpx;
+}
+
+button::after { border: 0; }
+
+.eyebrow { color: #0b807f; font-size: 24rpx; font-weight: 600; }
+.muted { color: #657783; }
+.section-title { font-size: 36rpx; font-weight: 700; }
+.status-note { color: #876019; background: #fff4dd; padding: 20rpx 24rpx; border-radius: 8rpx; font-size: 26rpx; }

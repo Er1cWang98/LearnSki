@@ -1,0 +1,9 @@
+<view class="mine-page">
+  <view class="mine-header"><text class="eyebrow">我的学习</text><text class="mine-title">练习与进度</text></view>
+  <view class="mine-summary">
+    <view class="summary-item"><text class="summary-value">{{route.completedText}}</text><text class="summary-label">必修课程</text></view>
+    <view class="summary-item"><text class="summary-value">—</text><text class="summary-label">已提交练习</text></view>
+  </view>
+  <view wx:if="{{route.notice}}" class="status-note mine-notice">{{route.notice}}</view>
+  <view class="records-section"><text class="section-title">练习记录</text><view class="records-empty"><text class="records-icon" aria-hidden="true">≡</text><text class="records-message">练习记录暂不可用</text><button bindtap="goLearn" class="learn-button">返回学习路线 <text aria-hidden="true">›</text></button></view></view>
+</view>

@@ -1,0 +1,27 @@
+.lesson-page { padding-bottom: calc(48rpx + env(safe-area-inset-bottom)); }
+.lesson-header { display: flex; flex-direction: column; align-items: flex-start; padding: 46rpx 36rpx 42rpx; background: #e9f0f0; }
+.lesson-title { margin-top: 18rpx; font-size: 48rpx; font-weight: 700; line-height: 1.35; }
+.lesson-goal { margin-top: 17rpx; color: #4c6572; font-size: 28rpx; line-height: 1.65; }
+.lesson-state { margin-top: 26rpx; font-size: 26rpx; font-weight: 600; }
+.state-completed, .state-available { color: #0b807f; }
+.state-locked, .state-unknown { color: #657783; }
+.lesson-notice { margin: 24rpx 32rpx 0; }
+.draft-label { margin: 24rpx 32rpx 0; padding: 20rpx 24rpx; color: #865b25; background: #fff2df; border-left: 6rpx solid #d89446; font-size: 25rpx; line-height: 1.5; }
+.lesson-section { margin: 42rpx 32rpx 0; padding-top: 4rpx; }
+.media-empty { display: flex; align-items: center; justify-content: center; height: 340rpx; margin-top: 22rpx; background: #dfe8e9; color: #506876; font-size: 28rpx; border-radius: 8rpx; }
+.lesson-media { width: 100%; margin-top: 22rpx; border-radius: 8rpx; }
+.step-row { display: flex; gap: 20rpx; padding: 24rpx 0; border-bottom: 1rpx solid #d9e2e5; line-height: 1.6; }
+.step-number { flex: 0 0 42rpx; color: #0b807f; font-size: 27rpx; font-weight: 700; }
+.step-text { flex: 1; font-size: 28rpx; }
+.text-row { display: flex; gap: 18rpx; padding: 20rpx 0; line-height: 1.6; font-size: 28rpx; border-bottom: 1rpx solid #d9e2e5; }
+.list-marker { color: #0b807f; font-size: 40rpx; line-height: 1; }
+.mistake-marker { flex: 0 0 26rpx; color: #b25b38; font-weight: 700; }
+.criterion-row { display: flex; align-items: flex-start; gap: 18rpx; padding: 22rpx 0; line-height: 1.55; font-size: 28rpx; border-bottom: 1rpx solid #d9e2e5; }
+.criterion-box { flex: 0 0 30rpx; width: 30rpx; height: 30rpx; margin-top: 7rpx; border: 2rpx solid #82949d; border-radius: 4rpx; }
+.practice-area { margin: 50rpx 32rpx 0; text-align: center; }
+.practice-action { display: flex; align-items: center; justify-content: center; min-height: 96rpx; background: #0b807f; color: #fff; border-radius: 8rpx; font-size: 30rpx; }
+.practice-action[disabled] { background: #c1d1d0; color: #506876; }
+.practice-note { display: block; margin-top: 16rpx; color: #657783; font-size: 24rpx; }
+.preview-panel { display: flex; flex-direction: column; gap: 18rpx; margin: 42rpx 32rpx 0; padding: 30rpx 0; border-top: 1rpx solid #d9e2e5; }
+.preview-copy { color: #506876; font-size: 28rpx; line-height: 1.6; }
+.invalid-page { padding: 60rpx 32rpx; color: #657783; text-align: center; }

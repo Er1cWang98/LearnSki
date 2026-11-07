@@ -1,0 +1,42 @@
+<view wx:if="{{lesson}}" class="lesson-page">
+  <view class="lesson-header">
+    <text class="eyebrow">入门课程 {{view.numberText}} · {{view.optionalText}}</text>
+    <text class="lesson-title">{{lesson.title}}</text>
+    <text class="lesson-goal">{{lesson.goal}}</text>
+    <text class="lesson-state state-{{view.status}}"><text aria-hidden="true">{{view.statusIcon}}</text> {{view.statusText}}</text>
+  </view>
+  <view wx:if="{{notice}}" class="status-note lesson-notice">{{notice}}</view>
+  <view wx:if="{{lesson.reviewStatus === 'draft'}}" class="draft-label">课程草稿，待教练校对</view>
+
+  <block wx:if="{{view.showFullContent}}">
+    <view class="lesson-section media-section">
+      <text class="section-title">教学媒体</text>
+      <view wx:if="{{!lesson.media}}" class="media-empty">教学视频待补充</view>
+      <video wx:elif="{{lesson.media.type === 'video'}}" class="lesson-media" src="{{lesson.media.src}}" poster="{{lesson.media.poster}}" controls />
+      <image wx:else class="lesson-media" src="{{lesson.media.src}}" mode="widthFix" />
+    </view>
+    <view class="lesson-section">
+      <text class="section-title">动作拆解</text>
+      <view wx:for="{{lesson.steps}}" wx:key="*this" class="step-row"><text class="step-number">{{index + 1}}</text><text class="step-text">{{item}}</text></view>
+    </view>
+    <view class="lesson-section">
+      <text class="section-title">关键要点</text>
+      <view wx:for="{{lesson.keyPoints}}" wx:key="*this" class="text-row"><text class="list-marker">·</text><text>{{item}}</text></view>
+    </view>
+    <view class="lesson-section">
+      <text class="section-title">常见错误</text>
+      <view wx:for="{{lesson.commonMistakes}}" wx:key="*this" class="text-row"><text class="mistake-marker">!</text><text>{{item}}</text></view>
+    </view>
+    <view class="lesson-section">
+      <text class="section-title">自查清单</text>
+      <view wx:for="{{lesson.criteria}}" wx:key="id" class="criterion-row"><text class="criterion-box" aria-hidden="true"></text><text>{{item.text}}</text></view>
+    </view>
+    <view class="practice-area"><button class="practice-action" disabled="{{true}}">{{view.actionLabel}}</button><text class="practice-note">练习打卡暂不可用</text></view>
+  </block>
+  <view wx:else class="preview-panel">
+    <text class="section-title">课程预览</text>
+    <text class="preview-copy">{{view.prerequisiteText}}</text>
+    <text class="preview-copy">{{view.status === 'unknown' ? '确认进度后可查看完整教学。' : '完成前置课程后可查看完整教学。'}}</text>
+  </view>
+</view>
+<view wx:else class="invalid-page">未找到这门课程</view>

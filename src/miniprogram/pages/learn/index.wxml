@@ -1,0 +1,26 @@
+<view class="learn-page">
+  <view class="intro-band">
+    <text class="eyebrow">单板滑雪 · 入门阶段</text>
+    <view class="hero-line"><text class="hero-title">从第一课开始</text><text class="hero-mark">01 / 11</text></view>
+    <text class="hero-copy">按自己的节奏阅读课程，练习完成后继续前进。</text>
+    <view class="progress-line"><text>必修进度</text><text class="progress-count">{{route.completedText}}</text></view>
+    <view wx:if="{{route.notice}}" class="status-note">{{route.notice}}</view>
+    <view wx:if="{{route.stageComplete}}" class="stage-complete">✓ 入门阶段已自评完成</view>
+    <button class="primary-action" bindtap="continueLearning">{{route.continueLabel}} <text aria-hidden="true">›</text></button>
+  </view>
+
+  <view class="route-section">
+    <view class="section-heading"><text class="section-title">入门路线</text><text class="course-count">11 门课程</text></view>
+    <view class="route-list">
+      <button wx:for="{{route.lessons}}" wx:key="id" class="course-row" data-id="{{item.id}}" bindtap="openLesson">
+        <view class="course-number">{{item.numberText}}</view>
+        <view class="course-main">
+          <view class="course-top"><text class="course-title">{{item.title}}</text><text class="course-type">{{item.optionalText}}</text></view>
+          <text class="course-goal">{{item.goal}}</text>
+          <view class="course-bottom"><text class="state state-{{item.status}}"><text aria-hidden="true">{{item.statusIcon}}</text> {{item.statusText}}</text><text class="course-chevron" aria-hidden="true">›</text></view>
+        </view>
+      </button>
+    </view>
+  </view>
+  <view class="next-stage"><text class="eyebrow">下一阶段</text><text class="next-title">进阶课程筹备中</text></view>
+</view>

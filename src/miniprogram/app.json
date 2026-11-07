@@ -1,0 +1,24 @@
+{
+  "pages": [
+    "pages/learn/index",
+    "pages/lesson/index",
+    "pages/mine/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "单板学习",
+    "navigationBarBackgroundColor": "#f3f6f7",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f3f6f7"
+  },
+  "tabBar": {
+    "color": "#657783",
+    "selectedColor": "#0b807f",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/learn/index", "text": "学习" },
+      { "pagePath": "pages/mine/index", "text": "我的" }
+    ]
+  },
+  "style": "v2"
+}
