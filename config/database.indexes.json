@@ -3,13 +3,13 @@
     "practices": [
       { "name": "owner_active_recent", "fields": { "ownerId": 1, "state": 1, "createdAt": -1, "_id": -1 } },
       { "name": "owner_lesson_active_recent", "fields": { "ownerId": 1, "lessonId": 1, "state": 1, "createdAt": -1, "_id": -1 } },
-      { "name": "deleting_cleanup", "fields": { "state": 1 } }
+      { "name": "deleting_cleanup", "fields": { "state": 1, "deletionRequestedAt": 1, "_id": 1 } }
     ],
     "completions": [
       { "name": "owner_recent", "fields": { "ownerId": 1, "createdAt": -1, "_id": -1 } }
     ],
     "uploads": [
-      { "name": "issued_expiry", "fields": { "state": 1, "expiresAt": 1 } }
+      { "name": "issued_expiry", "fields": { "state": 1, "expiresAt": 1, "_id": 1 } }
     ]
   }
 }

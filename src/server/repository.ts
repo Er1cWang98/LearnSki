@@ -35,6 +35,7 @@ type Document = {
 type Query = {
   where(condition: unknown): Query;
   orderBy(field: string, direction: 'asc' | 'desc'): Query;
+  skip(offset: number): Query;
   limit(count: number): Query;
   get(): Promise<{ data: unknown[] }>;
   count(): Promise<{ total: number }>;
@@ -94,14 +95,26 @@ export function createRepository(db: ReturnType<typeof import('wx-server-sdk').d
     },
     listCleanupCandidates: async (now, limit) => {
       if (!sdk.command) throw new Error('Database cleanup commands unavailable');
-      const [uploads, practices] = await Promise.all([
-        sdk.collection('uploads').where({ state: 'issued', expiresAt: sdk.command.lte(now) }).limit(limit).get(),
-        sdk.collection('practices').where({ state: 'deleting' }).limit(limit).get(),
-      ]);
-      return [
-        ...uploads.data.map((doc: any) => ({ collection: 'uploads' as const, id: doc._id as string })),
-        ...practices.data.map((doc: any) => ({ collection: 'practices' as const, id: doc._id as string })),
-      ].slice(0, limit);
+      const sources = [
+        { collection: 'uploads' as const, state: 'issued', timeField: 'expiresAt' },
+        { collection: 'uploads' as const, state: 'cleaning', timeField: 'expiresAt' },
+        { collection: 'practices' as const, state: 'deleting', timeField: 'deletionRequestedAt' },
+      ].map(source => ({ ...source, offset: 0, exhausted: false }));
+      const candidates: Array<{ collection: 'uploads' | 'practices'; id: string }> = [];
+      while (candidates.length < limit && sources.some(source => !source.exhausted)) {
+        for (const source of sources) {
+          if (source.exhausted || candidates.length >= limit) continue;
+          const pageSize = Math.min(20, limit - candidates.length);
+          const page = await sdk.collection(source.collection).where({ state: source.state,
+            [source.timeField]: sdk.command.lte(now) })
+            .orderBy(source.timeField, 'asc').orderBy('_id', 'asc')
+            .skip(source.offset).limit(pageSize).get();
+          candidates.push(...page.data.map((doc: any) => ({ collection: source.collection, id: doc._id as string })));
+          source.offset += page.data.length;
+          source.exhausted = page.data.length < pageSize;
+        }
+      }
+      return candidates;
     },
   };
 }

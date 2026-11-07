@@ -1,0 +1,5 @@
+{
+  "triggers": [
+    { "name": "cleanup-expired", "type": "timer", "config": "0 0 * * * * *" }
+  ]
+}

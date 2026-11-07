@@ -83,4 +83,6 @@ for (const [name, entry] of [
     main: 'index.js',
     dependencies: { 'wx-server-sdk': '4.0.2' },
   }, null, 2) + '\n');
+  if (name === 'maintenance')
+    await cp(join(root, 'config', 'maintenance.trigger.json'), join(output, 'config.json'));
 }

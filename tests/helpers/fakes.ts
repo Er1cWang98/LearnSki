@@ -60,24 +60,39 @@ export class MemoryRepository implements Repository {
   }
 
   async listCleanupCandidates(now: number, limit: number): Promise<Array<{ collection: 'uploads' | 'practices'; id: string }>> {
+    const sources = [
+      { collection: 'uploads' as const, state: 'issued', timeField: 'expiresAt' as const },
+      { collection: 'uploads' as const, state: 'cleaning', timeField: 'expiresAt' as const },
+      { collection: 'practices' as const, state: 'deleting', timeField: 'deletionRequestedAt' as const },
+    ].map(source => ({ ...source, offset: 0, exhausted: false }));
     const candidates: Array<{ collection: 'uploads' | 'practices'; id: string }> = [];
-    for (const [name, docs] of this.data) {
-      if (name !== 'uploads' && name !== 'practices') continue;
-      for (const [id, raw] of docs) {
-        const doc = raw as Stored;
-        if ((name === 'uploads' && doc.state === 'issued' && (doc.expiresAt ?? Infinity) <= now) ||
-          (name === 'practices' && doc.state === 'deleting')) candidates.push({ collection: name, id });
+    while (candidates.length < limit && sources.some(source => !source.exhausted)) {
+      for (const source of sources) {
+        if (source.exhausted || candidates.length >= limit) continue;
+        const pageSize = Math.min(20, limit - candidates.length);
+        const page = [...(this.data.get(source.collection)?.entries() ?? [])]
+          .filter(([, raw]) => (raw as Stored).state === source.state &&
+            ((raw as Stored)[source.timeField] ?? Infinity) <= now)
+          .sort(([aId, a], [bId, b]) => ((a as Stored)[source.timeField] ?? 0) -
+            ((b as Stored)[source.timeField] ?? 0) || aId.localeCompare(bId))
+          .slice(source.offset, source.offset + pageSize);
+        candidates.push(...page.map(([id]) => ({ collection: source.collection, id })));
+        source.offset += page.length;
+        source.exhausted = page.length < pageSize;
       }
     }
-    return candidates.slice(0, limit);
+    return candidates;
   }
 }
 
 export class MemoryFiles implements FileStore {
   private stored = new Map<string, { bytes: number; video: boolean }>();
+  private failRemoveOnce = false;
   inspectFailure: Error | null = null;
   removeFailure: Error | null = null;
   put(id: string, value: { bytes: number; video: boolean }): void { this.stored.set(id, value); }
+  has(id: string): boolean { return this.stored.has(id); }
+  failNextRemove(): void { this.failRemoveOnce = true; }
   async inspect(id: string): Promise<{ bytes: number; video: boolean }> {
     if (this.inspectFailure) throw this.inspectFailure;
     const result = this.stored.get(id);
@@ -89,6 +104,7 @@ export class MemoryFiles implements FileStore {
     return { url: `https://example.test/${id}`, expiresAt: 123456 };
   }
   async remove(id: string): Promise<void> {
+    if (this.failRemoveOnce) { this.failRemoveOnce = false; throw new Error('injected remove failure'); }
     if (this.removeFailure) throw this.removeFailure;
     this.stored.delete(id);
   }
@@ -98,10 +114,11 @@ export function createHarness() {
   const repository = new MemoryRepository();
   const files = new MemoryFiles();
   let now = 1_000_000;
-  const service = createService({ repository, files, now: () => now, randomId: randomUUID,
-    fileIdPrefix: 'cloud://test-env.123456/' });
+  const deps = { repository, files, now: () => now, randomId: randomUUID,
+    fileIdPrefix: 'cloud://test-env.123456/' };
+  const service = createService(deps);
   return {
-    apiA: service.forUser('user-a'), apiB: service.forUser('user-b'), repository, files,
+    apiA: service.forUser('user-a'), apiB: service.forUser('user-b'), repository, files, deps,
     advanceTime: (ms: number) => { now += ms; },
     failNextCommit: () => repository.failNextCommit(),
     seedCompletions: async (ownerId: string, completions: Completion[]) => {

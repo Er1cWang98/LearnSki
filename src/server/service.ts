@@ -7,7 +7,7 @@ import type { ServiceDeps, Transaction } from './repository';
 
 type StoredCompletion = Completion & { ownerId: string; createdAt: number };
 type UploadSession = UploadTicket & {
-  ownerId: string; lessonId: string; lessonVersion: number; state: 'issued' | 'consumed';
+  ownerId: string; lessonId: string; lessonVersion: number; state: 'issued' | 'consumed' | 'cleaning' | 'expired';
   createdAt: number; recordId?: string; inputDigest?: string;
 };
 type StoredPractice = PracticeRecord & { ownerId: string; videoFileId: string; state: 'active' | 'deleting'; deletionRequestedAt?: number };
