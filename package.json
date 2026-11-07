@@ -1,0 +1,20 @@
+{
+  "name": "learnski-snowboard-miniapp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node scripts/test.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "wx-server-sdk": "4.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.0",
+    "esbuild": "0.25.12",
+    "miniprogram-api-typings": "5.2.3",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

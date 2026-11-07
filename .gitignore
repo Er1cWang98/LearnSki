@@ -1,0 +1,4 @@
+dist/
+node_modules/
+config/cloud.local.json
+project.private.config.json
