@@ -7,7 +7,8 @@ export interface Transaction {
 export interface Repository {
   transaction<T>(run: (tx: Transaction) => Promise<T>): Promise<T>;
   listOwned<T>(collection: string, ownerId: string,
-    options: { lessonId?: string; before?: { createdAt: number; id: string }; limit: number }): Promise<T[]>;
+    options: { lessonId?: string; state?: string; before?: { createdAt: number; id: string }; limit: number }): Promise<T[]>;
+  countOwnedActive(ownerId: string): Promise<number>;
   listCleanupCandidates(now: number, limit: number):
     Promise<Array<{ collection: 'uploads' | 'practices'; id: string }>>;
 }
@@ -36,6 +37,7 @@ type Query = {
   orderBy(field: string, direction: 'asc' | 'desc'): Query;
   limit(count: number): Query;
   get(): Promise<{ data: unknown[] }>;
+  count(): Promise<{ total: number }>;
 };
 type Collection = Query & { doc(id: string): Document };
 type AdapterDatabase = {
@@ -70,9 +72,10 @@ export function createRepository(db: ReturnType<typeof import('wx-server-sdk').d
         await sdkTx.collection(collection).doc(id).remove();
       },
     })),
-    listOwned: async <T>(collection: string, ownerId: string, options: { lessonId?: string; before?: { createdAt: number; id: string }; limit: number }): Promise<T[]> => {
+    listOwned: async <T>(collection: string, ownerId: string, options: { lessonId?: string; state?: string; before?: { createdAt: number; id: string }; limit: number }): Promise<T[]> => {
       const base: Record<string, unknown> = { ownerId };
       if (options.lessonId) base.lessonId = options.lessonId;
+      if (options.state) base.state = options.state;
       let condition: unknown = base;
       if (options.before) {
         if (!sdk.command) throw new Error('Database cursor commands unavailable');
@@ -84,6 +87,10 @@ export function createRepository(db: ReturnType<typeof import('wx-server-sdk').d
       const result = await sdk.collection(collection).where(condition).orderBy('createdAt', 'desc')
         .orderBy('_id', 'desc').limit(options.limit).get();
       return result.data as T[];
+    },
+    countOwnedActive: async ownerId => {
+      const result = await sdk.collection('practices').where({ ownerId, state: 'active' }).count();
+      return result.total;
     },
     listCleanupCandidates: async (now, limit) => {
       if (!sdk.command) throw new Error('Database cleanup commands unavailable');

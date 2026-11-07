@@ -62,7 +62,7 @@ export type CommitInput = {
   result: Outcome;
 };
 
-export type RecordPage = { items: PracticeRecord[]; nextCursor: string | null };
+export type RecordPage = { items: PracticeRecord[]; nextCursor: string | null; totalActive: number };
 
 export type LearningApi = {
   getProgress(): Promise<{ scope: string; progress: Progress }>;

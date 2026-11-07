@@ -1,0 +1,16 @@
+.record-page { padding-bottom: calc(56rpx + env(safe-area-inset-bottom)); }
+.record-header { display: flex; flex-direction: column; gap: 14rpx; padding: 46rpx 36rpx 40rpx; background: #e9f0f0; }
+.record-title { font-size: 46rpx; font-weight: 700; line-height: 1.35; }
+.record-meta { color: #506876; font-size: 26rpx; }
+.record-section { margin: 40rpx 32rpx 0; }
+.record-video { width: 100%; margin-top: 22rpx; }
+.record-video-error { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320rpx; margin-top: 22rpx; background: #dfe8e9; color: #506876; font-size: 27rpx; }
+.criterion { display: flex; gap: 18rpx; padding: 22rpx 0; border-bottom: 1rpx solid #d9e2e5; font-size: 28rpx; line-height: 1.55; }
+.criterion-mark { color: #0b807f; font-size: 31rpx; }
+.record-note { display: block; margin-top: 20rpx; color: #374f5a; font-size: 28rpx; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.delete-section { margin: 55rpx 32rpx 0; padding-top: 28rpx; border-top: 1rpx solid #d9e2e5; }
+.delete-button, .record-secondary { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 28rpx; font-size: 27rpx; border-radius: 8rpx; }
+.delete-button { width: 100%; background: #fff; border: 1rpx solid #b34040; color: #b34040; }
+.record-secondary { margin-top: 22rpx; background: #0b807f; color: #fff; }
+.record-notice { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400rpx; padding: 40rpx 32rpx; color: #506876; font-size: 28rpx; text-align: center; }
+.record-error { display: block; margin-bottom: 18rpx; color: #b34040; font-size: 26rpx; }

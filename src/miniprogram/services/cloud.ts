@@ -59,7 +59,8 @@ function isCommitResult(value: unknown): value is CommitResult {
 function isRecordPage(value: unknown): value is RecordPage {
   return isObject(value) && Array.isArray(value.items) &&
     value.items.every(isPracticeRecord) &&
-    (value.nextCursor === null || typeof value.nextCursor === 'string');
+    (value.nextCursor === null || typeof value.nextCursor === 'string') &&
+    Number.isSafeInteger(value.totalActive) && (value.totalActive as number) >= 0;
 }
 
 function isPlaybackResult(value: unknown): value is PlaybackResult {

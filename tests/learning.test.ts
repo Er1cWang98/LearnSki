@@ -177,6 +177,18 @@ test('partial nested success data rejects NETWORK_ERROR without claiming a valid
   }
 });
 
+test('record page without active total is rejected by the cloud payload guard', async () => {
+  const previousWx = (globalThis as { wx?: unknown }).wx;
+  (globalThis as { wx?: unknown }).wx = {
+    cloud: { callFunction: async () => ({ result: { ok: true, data: { items: [], nextCursor: null } } }) },
+  };
+  try {
+    await assert.rejects(createApi('env-1').listRecords({ limit: 20 }), { code: 'NETWORK_ERROR' });
+  } finally {
+    (globalThis as { wx?: unknown }).wx = previousWx;
+  }
+});
+
 test('well-formed server failure keeps its business code and malformed failure rejects NETWORK_ERROR', async () => {
   const previousWx = (globalThis as { wx?: unknown }).wx;
   let result: unknown = { ok: false, error: { code: 'LESSON_LOCKED', message: '课程未解锁' } };

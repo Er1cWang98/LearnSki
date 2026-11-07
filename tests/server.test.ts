@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getLesson } from '../src/catalog/intro';
 import { createRepository } from '../src/server/repository';
+import { finishDeletion } from '../src/server/service';
 import { handleRequest } from '../src/server/entry';
-import { createHarness } from './helpers/fakes';
+import { completeFirstLesson, createHarness } from './helpers/fakes';
 import type { CommitInput } from '../src/domain/types';
 
 async function ready(h: ReturnType<typeof createHarness>, result: CommitInput['result'] = 'selfCompleted') {
@@ -93,6 +94,74 @@ test('RPC rejects unknown actions and prototype properties', async () => {
   assert.equal((await handleRequest({ action: '__proto__', input: {} }, context)).ok, false);
   assert.equal((await handleRequest({ action: 'deleteRecord', input: { id: 'x' } }, context)).ok, false);
   assert.equal((await handleRequest({ action: 'getProgress', input: {} }, context)).ok, true);
+});
+
+test('records and playback are private, and deletion preserves completion', async () => {
+  const h = createHarness();
+  const record = await completeFirstLesson(h);
+  assert.equal((await h.apiA.getRecord(record.id)).id, record.id);
+  assert.equal('videoFileId' in await h.apiA.getRecord(record.id), false);
+  assert.match((await h.apiA.getPlayback(record.id)).url, /^https:/);
+  await assert.rejects(h.apiB.getRecord(record.id), { code: 'NOT_FOUND' });
+  await assert.rejects(h.apiB.getPlayback(record.id), { code: 'NOT_FOUND' });
+  await assert.rejects(h.apiB.deleteRecord(record.id), { code: 'NOT_FOUND' });
+  assert.deepEqual(await h.apiA.deleteRecord(record.id), { state: 'deleted' });
+  assert.equal((await h.apiA.getProgress()).progress.requiredDone, 1);
+  assert.equal((await h.apiA.listRecords({ limit: 20 })).totalActive, 0);
+  await assert.rejects(h.apiA.getRecord(record.id), { code: 'NOT_FOUND' });
+  assert.deepEqual(await h.apiA.deleteRecord(record.id), { state: 'deleted' });
+  await assert.rejects(h.apiB.deleteRecord(record.id), { code: 'NOT_FOUND' });
+  await assert.rejects(h.apiA.deleteRecord('unknown'), { code: 'NOT_FOUND' });
+  const completion = (await h.repository.listOwned<{ sourceRecordId: string | null }>('completions', 'user-a', { limit: 10 }))[0];
+  assert.equal(completion.sourceRecordId, null);
+});
+
+test('records use stable descending cursors and owner-wide active count under lesson filter', async () => {
+  const h = createHarness();
+  const first = await completeFirstLesson(h);
+  const second = await completeFirstLesson(h);
+  const third = await completeFirstLesson(h);
+  await h.repository.transaction(async tx => {
+    const other = await tx.get<Record<string, unknown>>('practices', third.id);
+    await tx.set('practices', 'other-lesson', { ...other, id: 'other-lesson', lessonId: 'intro-02' });
+  });
+  const page1 = await h.apiA.listRecords({ lessonId: 'intro-01', limit: 2 });
+  const page2 = await h.apiA.listRecords({ lessonId: 'intro-01', limit: 2, cursor: page1.nextCursor! });
+  assert.equal(page1.totalActive, 4);
+  assert.equal(page2.totalActive, 4);
+  assert.equal(page1.items.length, 2);
+  assert.equal(page2.items.length, 1);
+  assert.deepEqual(new Set([...page1.items, ...page2.items].map(item => item.id)), new Set([first.id, second.id, third.id]));
+  assert.equal(page2.nextCursor, null);
+  await assert.rejects(h.apiA.listRecords({ limit: 21 }), { code: 'INVALID_INPUT' });
+  await assert.rejects(h.apiA.listRecords({ limit: 1, cursor: Buffer.from(JSON.stringify({ createdAt: 1, id: 'x', ownerId: 'user-b' })).toString('base64') }), { code: 'INVALID_INPUT' });
+});
+
+test('failed file removal leaves a hidden deleting record for maintenance to finish', async () => {
+  const h = createHarness();
+  const record = await completeFirstLesson(h);
+  h.files.removeFailure = new Error('storage offline');
+  assert.deepEqual(await h.apiA.deleteRecord(record.id), { state: 'deleting' });
+  assert.equal((await h.apiA.listRecords({ limit: 20 })).items.length, 0);
+  assert.equal((await h.apiA.listRecords({ limit: 20 })).totalActive, 0);
+  await assert.rejects(h.apiA.getRecord(record.id), { code: 'NOT_FOUND' });
+  h.files.removeFailure = null;
+  assert.deepEqual(await h.apiA.deleteRecord(record.id), { state: 'deleted' });
+  assert.equal((await h.apiA.getProgress()).progress.requiredDone, 1);
+});
+
+test('maintenance finisher checks owner and completes a pending deletion idempotently', async () => {
+  const h = createHarness();
+  const record = await completeFirstLesson(h);
+  h.files.removeFailure = new Error('storage offline');
+  await h.apiA.deleteRecord(record.id);
+  h.files.removeFailure = null;
+  const deps = { repository: h.repository, files: h.files, now: () => 1_000_000,
+    randomId: () => 'unused', fileIdPrefix: 'cloud://test-env.123456/' };
+  await assert.rejects(finishDeletion(deps, 'user-b', record.id), { code: 'NOT_FOUND' });
+  assert.deepEqual(await finishDeletion(deps, 'user-a', record.id), { state: 'deleted' });
+  assert.deepEqual(await finishDeletion(deps, 'user-a', record.id), { state: 'deleted' });
+  assert.equal((await h.apiA.getProgress()).progress.requiredDone, 1);
 });
 
 test('RPC does not return raw infrastructure error messages', async () => {

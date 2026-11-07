@@ -3,17 +3,21 @@ import * as cloud from 'wx-server-sdk';
 import { createRepository } from './repository';
 import { createFileStore } from './files';
 import { createService } from './service';
-import type { CheckInApi } from './service';
+import type { LearningApi } from '../domain/types';
 
-type Service = { forUser(ownerId: string): CheckInApi };
+type Service = { forUser(ownerId: string): LearningApi };
 type Context = { openid: string | undefined; service: Service };
 type RpcResponse = { ok: true; data: unknown } | { ok: false; error: { code: string; message: string } };
-type Handler = (api: CheckInApi, input: any) => Promise<unknown>;
+type Handler = (api: LearningApi, input: any) => Promise<unknown>;
 
 const actions: Record<string, Handler> = Object.assign(Object.create(null), {
-  getProgress: (api: CheckInApi) => api.getProgress(),
-  createUpload: (api: CheckInApi, input: unknown) => api.createUpload(input as Parameters<CheckInApi['createUpload']>[0]),
-  commit: (api: CheckInApi, input: unknown) => api.commit(input as Parameters<CheckInApi['commit']>[0]),
+  getProgress: (api: LearningApi) => api.getProgress(),
+  createUpload: (api: LearningApi, input: unknown) => api.createUpload(input as Parameters<LearningApi['createUpload']>[0]),
+  commit: (api: LearningApi, input: unknown) => api.commit(input as Parameters<LearningApi['commit']>[0]),
+  listRecords: (api: LearningApi, input: unknown) => api.listRecords(input as Parameters<LearningApi['listRecords']>[0]),
+  getRecord: (api: LearningApi, input: { id: string }) => api.getRecord(input.id),
+  getPlayback: (api: LearningApi, input: { id: string }) => api.getPlayback(input.id),
+  deleteRecord: (api: LearningApi, input: { id: string }) => api.deleteRecord(input.id),
 });
 
 export async function handleRequest(event: unknown, context: Context): Promise<RpcResponse> {

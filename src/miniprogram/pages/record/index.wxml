@@ -1,0 +1,26 @@
+<view class="record-page">
+  <view wx:if="{{view.phase === 'loading'}}" class="record-notice">正在读取记录…</view>
+  <view wx:elif="{{view.phase === 'error'}}" class="record-notice">
+    <text>{{view.errorText}}</text><button class="record-secondary" bindtap="retryLoad">重试</button>
+  </view>
+  <view wx:elif="{{view.phase === 'deleted'}}" class="record-notice">
+    <text>记录与视频已删除，课程进度已保留</text><button class="record-secondary" bindtap="goBack">返回记录</button>
+  </view>
+  <view wx:elif="{{view.phase === 'deleting'}}" class="record-notice">
+    <text>视频正在删除，记录已从列表隐藏</text><button class="record-secondary" bindtap="retryDelete">重试处理</button>
+  </view>
+  <block wx:else>
+    <view class="record-header"><text class="eyebrow">练习记录</text><text class="record-title">{{view.title}}</text><text class="record-meta">{{view.dateText}} · {{view.resultText}}</text></view>
+    <view class="record-section">
+      <text class="section-title">练习视频</text>
+      <video wx:if="{{view.playbackUrl}}" class="record-video" src="{{view.playbackUrl}}" controls binderror="videoError"></video>
+      <view wx:elif="{{view.playbackError}}" class="record-video-error"><text>视频暂时无法播放</text><button class="record-secondary" bindtap="retryPlayback">重试播放</button></view>
+      <view wx:else class="record-video-error">正在获取播放地址…</view>
+    </view>
+    <view class="record-section"><text class="section-title">自查清单</text>
+      <view wx:for="{{view.criteria}}" wx:key="id" class="criterion"><text class="criterion-mark">{{item.checked ? '✓' : '○'}}</text><text>{{item.text}}</text></view>
+    </view>
+    <view wx:if="{{view.record.note}}" class="record-section"><text class="section-title">练习心得</text><text class="record-note">{{view.record.note}}</text></view>
+    <view class="delete-section"><text wx:if="{{view.errorText}}" class="record-error">{{view.errorText}}</text><button class="delete-button" disabled="{{view.busy}}" bindtap="confirmDelete">删除记录和视频</button></view>
+  </block>
+</view>

@@ -3,7 +3,8 @@
     "pages/learn/index",
     "pages/lesson/index",
     "pages/practice/index",
-    "pages/mine/index"
+    "pages/mine/index",
+    "pages/record/index"
   ],
   "window": {
     "navigationBarTitleText": "单板学习",

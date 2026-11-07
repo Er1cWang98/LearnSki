@@ -5,8 +5,6 @@ import { validateCommit } from '../domain/validation';
 import type { CommitInput, Completion, LearningApi, PracticeRecord, UploadTicket } from '../domain/types';
 import type { ServiceDeps, Transaction } from './repository';
 
-export type CheckInApi = Pick<LearningApi, 'getProgress' | 'createUpload' | 'commit'>;
-
 type StoredCompletion = Completion & { ownerId: string; createdAt: number };
 type UploadSession = UploadTicket & {
   ownerId: string; lessonId: string; lessonVersion: number; state: 'issued' | 'consumed';
@@ -25,7 +23,54 @@ function publicRecord(doc: StoredPractice): PracticeRecord {
   return { id, lessonId, lessonVersion, criteriaSnapshot, checkedIds, note, result, createdAt };
 }
 
-export function createService(deps: ServiceDeps): { forUser(ownerId: string): CheckInApi } {
+function cursor(input: string | undefined): { createdAt: number; id: string } | undefined {
+  if (input === undefined) return undefined;
+  if (typeof input !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(input) || input.length > 512)
+    error('INVALID_INPUT', '游标无效');
+  try {
+    const value: unknown = JSON.parse(Buffer.from(input, 'base64').toString('utf8'));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) error('INVALID_INPUT', '游标无效');
+    const fields = value as Record<string, unknown>;
+    if (Object.keys(fields).sort().join(',') !== 'createdAt,id' ||
+      !Number.isSafeInteger(fields.createdAt) || (fields.createdAt as number) < 0 ||
+      typeof fields.id !== 'string' || !fields.id || fields.id.length > 128)
+      error('INVALID_INPUT', '游标无效');
+    return { createdAt: fields.createdAt as number, id: fields.id as string };
+  } catch { return error('INVALID_INPUT', '游标无效'); }
+}
+
+function ownedRecord(record: StoredPractice | null, ownerId: string): StoredPractice {
+  if (!record || record.ownerId !== ownerId || record.state !== 'active')
+    return error('NOT_FOUND', '练习记录不存在');
+  return record;
+}
+
+export async function finishDeletion(deps: ServiceDeps, ownerId: string, recordId: string): Promise<{ state: 'deleted' | 'deleting' }> {
+  const record = await deps.repository.transaction(async tx => {
+    const current = await tx.get<StoredPractice>('practices', recordId);
+    if (current?.ownerId === ownerId && current.state === 'deleting') return current;
+    if (current) return error('NOT_FOUND', '练习记录不存在');
+    const session = await tx.get<UploadSession>('uploads', recordId);
+    if (session?.ownerId === ownerId && session.state === 'consumed' && session.recordId === recordId)
+      return null;
+    return error('NOT_FOUND', '练习记录不存在');
+  });
+  if (!record) return { state: 'deleted' };
+  try { await deps.files.remove(record.videoFileId); }
+  catch { return { state: 'deleting' }; }
+  await deps.repository.transaction(async tx => {
+    const current = await tx.get<StoredPractice>('practices', recordId);
+    if (!current || current.ownerId !== ownerId || current.state !== 'deleting') return;
+    const completionKey = completionId(ownerId, current.lessonId);
+    const completion = await tx.get<StoredCompletion>('completions', completionKey);
+    if (completion?.ownerId === ownerId && completion.sourceRecordId === recordId)
+      await tx.set('completions', completionKey, { ...completion, sourceRecordId: null });
+    await tx.remove('practices', recordId);
+  });
+  return { state: 'deleted' };
+}
+
+export function createService(deps: ServiceDeps): { forUser(ownerId: string): LearningApi } {
   return {
     forUser(ownerId) {
       if (typeof ownerId !== 'string' || !ownerId.trim()) error('UNAUTHENTICATED', '请先登录');
@@ -133,6 +178,48 @@ export function createService(deps: ServiceDeps): { forUser(ownerId: string): Ch
             return stored;
           });
           return { record: publicRecord(record), progress: (await progress()).progress };
+        },
+        async listRecords(input) {
+          if (!input || !Number.isInteger(input.limit) || input.limit < 1 || input.limit > 20 ||
+            (input.lessonId !== undefined && (typeof input.lessonId !== 'string' || !input.lessonId)))
+            error('INVALID_INPUT', '列表参数无效');
+          const before = cursor(input.cursor);
+          const [docs, totalActive] = await Promise.all([
+            deps.repository.listOwned<StoredPractice>('practices', ownerId, {
+              lessonId: input.lessonId, state: 'active', before, limit: input.limit + 1,
+            }),
+            deps.repository.countOwnedActive(ownerId),
+          ]);
+          const page = docs.slice(0, input.limit);
+          const last = page[page.length - 1];
+          return { items: page.map(publicRecord), totalActive,
+            nextCursor: docs.length > input.limit && last
+              ? Buffer.from(JSON.stringify({ createdAt: last.createdAt, id: last.id })).toString('base64') : null };
+        },
+        async getRecord(id) {
+          if (typeof id !== 'string' || !id) error('INVALID_INPUT', '记录 ID 无效');
+          const record = await deps.repository.transaction(tx => tx.get<StoredPractice>('practices', id));
+          return publicRecord(ownedRecord(record, ownerId));
+        },
+        async getPlayback(id) {
+          if (typeof id !== 'string' || !id) error('INVALID_INPUT', '记录 ID 无效');
+          const record = await deps.repository.transaction(tx => tx.get<StoredPractice>('practices', id));
+          return deps.files.playback(ownedRecord(record, ownerId).videoFileId);
+        },
+        async deleteRecord(id) {
+          if (typeof id !== 'string' || !id) error('INVALID_INPUT', '记录 ID 无效');
+          await deps.repository.transaction(async tx => {
+            const current = await tx.get<StoredPractice>('practices', id);
+            if (!current) {
+              const session = await tx.get<UploadSession>('uploads', id);
+              if (session?.ownerId === ownerId && session.state === 'consumed' && session.recordId === id) return;
+              return error('NOT_FOUND', '练习记录不存在');
+            }
+            if (current.ownerId !== ownerId) error('NOT_FOUND', '练习记录不存在');
+            if (current.state === 'active')
+              await tx.set('practices', id, { ...current, state: 'deleting', deletionRequestedAt: deps.now() });
+          });
+          return finishDeletion(deps, ownerId, id);
         },
       };
     },

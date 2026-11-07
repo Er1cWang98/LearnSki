@@ -2,8 +2,32 @@
   <view class="mine-header"><text class="eyebrow">我的学习</text><text class="mine-title">练习与进度</text></view>
   <view class="mine-summary">
     <view class="summary-item"><text class="summary-value">{{route.completedText}}</text><text class="summary-label">必修课程</text></view>
-    <view class="summary-item"><text class="summary-value">—</text><text class="summary-label">已提交练习</text></view>
+    <view class="summary-item"><text class="summary-value">{{records.totalActive === null ? '—' : records.totalActive}}</text><text class="summary-label">已提交练习</text></view>
   </view>
   <view wx:if="{{route.notice}}" class="status-note mine-notice">{{route.notice}}</view>
-  <view class="records-section"><text class="section-title">练习记录</text><view class="records-empty"><text class="records-icon" aria-hidden="true">≡</text><text class="records-message">练习记录暂不可用</text><button bindtap="goLearn" class="learn-button">返回学习路线 <text aria-hidden="true">›</text></button></view></view>
+  <view class="records-section">
+    <view class="records-heading"><text class="section-title">练习记录</text>
+      <picker range="{{filterOptions}}" range-key="title" value="{{filterIndex}}" bindchange="changeFilter">
+        <view class="filter-control">{{filterOptions[filterIndex].title}} <text aria-hidden="true">⌄</text></view>
+      </picker>
+    </view>
+    <view wx:if="{{records.phase === 'loading'}}" class="records-message">正在读取记录…</view>
+    <view wx:elif="{{records.phase === 'error'}}" class="records-empty">
+      <text class="records-message">记录暂时无法读取</text><button class="learn-button" bindtap="retryLoad">重试</button>
+    </view>
+    <view wx:elif="{{records.phase === 'empty'}}" class="records-empty">
+      <text class="records-message">{{filterIndex === 0 ? '还没有练习记录' : '这门课程还没有练习记录'}}</text>
+      <button wx:if="{{filterIndex === 0}}" bindtap="goLearn" class="learn-button">返回学习路线</button>
+    </view>
+    <block wx:else>
+      <view class="record-list">
+        <button wx:for="{{rows}}" wx:key="id" class="record-row" data-id="{{item.id}}" bindtap="openRecord">
+          <view class="record-main"><text class="record-title">{{item.title}}</text><text class="record-meta">{{item.dateText}} · {{item.resultText}}</text></view>
+          <text class="record-arrow" aria-hidden="true">›</text>
+        </button>
+      </view>
+      <button wx:if="{{records.nextCursor && !records.moreError}}" class="more-button" disabled="{{records.loadingMore}}" bindtap="loadMore">{{records.loadingMore ? '正在加载…' : '加载更多'}}</button>
+      <button wx:if="{{records.moreError}}" class="more-button" bindtap="loadMore">加载失败，重试</button>
+    </block>
+  </view>
 </view>

@@ -41,16 +41,22 @@ export class MemoryRepository implements Repository {
     } finally { release(); }
   }
 
-  async listOwned<T>(name: string, ownerId: string, options: { lessonId?: string; before?: { createdAt: number; id: string }; limit: number }): Promise<T[]> {
+  async listOwned<T>(name: string, ownerId: string, options: { lessonId?: string; state?: string; before?: { createdAt: number; id: string }; limit: number }): Promise<T[]> {
     return [...(this.data.get(name)?.entries() ?? [])]
       .filter(([, raw]) => {
         const doc = raw as Stored;
-        return doc.ownerId === ownerId && (!options.lessonId || doc.lessonId === options.lessonId);
+        return doc.ownerId === ownerId && (!options.lessonId || doc.lessonId === options.lessonId) &&
+          (!options.state || doc.state === options.state);
       })
       .sort(([aId, a], [bId, b]) => (b as Stored).createdAt! - (a as Stored).createdAt! || bId.localeCompare(aId))
       .filter(([id, raw]) => !options.before || (raw as Stored).createdAt! < options.before.createdAt ||
         ((raw as Stored).createdAt === options.before.createdAt && id < options.before.id))
       .slice(0, options.limit).map(([, raw]) => structuredClone(raw) as T);
+  }
+
+  async countOwnedActive(ownerId: string): Promise<number> {
+    return [...(this.data.get('practices')?.values() ?? [])]
+      .filter(raw => (raw as Stored).ownerId === ownerId && (raw as Stored).state === 'active').length;
   }
 
   async listCleanupCandidates(now: number, limit: number): Promise<Array<{ collection: 'uploads' | 'practices'; id: string }>> {
