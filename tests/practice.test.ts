@@ -351,3 +351,76 @@ test('failed draft restoration blocks a fresh upload and leaves cleanup nonrejec
   assert.equal(controller.getState().video, null);
   await assert.doesNotReject(controller.dispose());
 });
+
+test('removing a video preserves note/checklist, persists no-video state and ignores late upload results', async () => {
+  const h = createPracticeHarness();
+  await h.controller.ready;
+  h.controller.setNote('保留心得'); h.controller.setChecked(['intro-01-name']);
+  const gate = deferred<string>(); const started = deferred<void>(); let aborted = false;
+  let progress!: (value: number) => void;
+  h.media.startUpload = (_ticket, _video, callback) => {
+    progress = callback; started.resolve();
+    return { promise: gate.promise, abort() { aborted = true; } };
+  };
+  const choosing = h.controller.choose('album');
+  await started.promise;
+  (h.controller as any).removeVideo();
+  assert.equal(aborted, true);
+  progress(100); gate.resolve('late-file'); await choosing;
+  assert.equal(h.state().video, null); assert.equal(h.state().uploaded, false);
+  assert.equal(h.state().percent, 0); assert.equal(h.state().note, '保留心得');
+  assert.deepEqual(h.state().checkedIds, ['intro-01-name']);
+  const saved = h.stored.get('scope-a:intro-01')!;
+  assert.equal(saved.video, null); assert.equal(saved.ticket, null); assert.equal(saved.fileId, null); assert.equal(saved.snapshot, null);
+  await h.controller.submit('practicing');
+  assert.equal(h.state().error, 'VIDEO_REQUIRED'); assert.equal(h.commits.length, 0);
+});
+
+test('uploaded video can be removed but frozen uncertain submissions require explicit beginEdit', async () => {
+  const h = createPracticeHarness(); await h.controller.ready; await h.controller.choose('album');
+  h.api.commit = async () => { throw { code: 'NETWORK_ERROR' }; };
+  await h.controller.submit('practicing');
+  const frozen = structuredClone(h.stored.get('scope-a:intro-01')!.snapshot);
+  (h.controller as any).removeVideo(); await h.controller.choose('camera'); await h.controller.retryUpload();
+  assert.equal(h.state().uploaded, true); assert.equal(h.state().frozen, true);
+  assert.deepEqual(h.stored.get('scope-a:intro-01')!.snapshot, frozen);
+  h.controller.beginEdit(); (h.controller as any).removeVideo();
+  assert.equal(h.state().video, null); assert.equal(h.state().frozen, false);
+  await h.controller.choose('album'); assert.equal(h.state().uploaded, true);
+  (h.controller as any).removeVideo(); assert.equal(h.state().uploaded, false);
+});
+
+test('expired local video restoration shows a notice only without a usable upload or frozen submission', async () => {
+  const h = createPracticeHarness(); await h.controller.ready; await h.controller.choose('album');
+  const source = structuredClone(h.stored.get('scope-a:intro-01')!);
+  const wxApi = { getStorageSync: () => source, getFileSystemManager: () => ({ access: ({ fail }: any) => fail() }) } as any;
+  const drafts = createDraftStore(wxApi);
+  for (const usable of ['none', 'uploaded', 'frozen']) {
+    const saved = structuredClone(source);
+    if (usable === 'none') { saved.ticket = null; saved.fileId = null; }
+    if (usable === 'frozen') saved.snapshot = { sessionId: source.ticket!.id, fileId: source.fileId!, lessonVersion: 1,
+      checkedIds: [], note: '重试', result: 'practicing' };
+    wxApi.getStorageSync = () => saved;
+    const loaded = await drafts.load('scope-a', 'intro-01');
+    const controller = createPracticeController({ api: h.api, media: h.media, drafts,
+      lesson: getLesson('intro-01'), scope: 'scope-a', onChange() {} });
+    await controller.ready;
+    assert.equal(loaded!.video, null);
+    assert.equal((controller.getState() as any).videoExpired, usable === 'none');
+    assert.equal(controller.getState().uploaded, usable !== 'none');
+    assert.equal(controller.getState().frozen, usable === 'frozen');
+  }
+});
+
+for (const action of ['ticket', 'commit']) test(`${action} VERSION_CHANGED clears displayed checks while preserving frozen wire data`, async () => {
+  const h = createPracticeHarness(); await h.controller.ready;
+  h.controller.setNote('保留'); h.controller.setChecked(['intro-01-name']);
+  if (action === 'ticket') h.api.createUpload = async () => { throw { code: 'VERSION_CHANGED' }; };
+  else h.api.commit = async () => { throw { code: 'VERSION_CHANGED' }; };
+  await h.controller.choose('album');
+  if (action === 'commit') await h.controller.submit('practicing');
+  assert.deepEqual(h.state().checkedIds, []); assert.equal(h.state().versionBlocked, true);
+  assert.equal(h.state().note, '保留'); assert.ok(h.state().video);
+  assert.deepEqual(h.stored.get('scope-a:intro-01')!.checkedIds, []);
+  if (action === 'commit') assert.deepEqual(h.stored.get('scope-a:intro-01')!.snapshot!.checkedIds, ['intro-01-name']);
+});

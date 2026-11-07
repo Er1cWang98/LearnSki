@@ -8,6 +8,7 @@
     "build": "node scripts/build.mjs"
   },
   "dependencies": {
+    "@cloudbase/node-sdk": "3.17.2",
     "wx-server-sdk": "4.0.2"
   },
   "devDependencies": {

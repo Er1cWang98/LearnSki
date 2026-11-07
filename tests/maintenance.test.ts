@@ -8,6 +8,17 @@ import { completeFirstLesson, createHarness, deferred } from './helpers/fakes';
 
 const day = 24 * 60 * 60 * 1000;
 
+async function expectedFailure(run: () => Promise<unknown>) {
+  const lines: string[] = [];
+  const previous = console.error;
+  console.error = value => { lines.push(String(value)); };
+  try { await run(); } finally { console.error = previous; }
+  assert.equal(lines.length, 1);
+  assert.deepEqual(Object.keys(JSON.parse(lines[0])).sort(), ['code', 'collection', 'event', 'idHash']);
+  assert.equal(JSON.parse(lines[0]).event, 'maintenance_failure');
+  assert.equal(JSON.parse(lines[0]).code, 'MAINTENANCE_FAILED');
+}
+
 test('expired unused upload retries removal without touching a completed video', async () => {
   const h = createHarness();
   const saved = await completeFirstLesson(h);
@@ -16,7 +27,7 @@ test('expired unused upload retries removal without touching a completed video',
   h.files.put(unused.expectedFileId, { bytes: 1024, video: true });
   h.advanceTime(25 * 60 * 60 * 1000);
   h.files.failNextRemove();
-  assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 0, failed: 1, skipped: 0 });
+  await expectedFailure(async () => assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 0, failed: 1, skipped: 0 }));
   assert.equal((await h.repository.transaction(tx => tx.get<{ state: string }>('uploads', unused.id)))?.state, 'cleaning');
   assert.equal(h.files.has(unused.expectedFileId), true);
   assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 1, failed: 0, skipped: 0 });
@@ -50,7 +61,7 @@ test('failed claim transaction leaves the upload video intact for a later run', 
   h.files.put(ticket.expectedFileId, { bytes: 1024, video: true });
   h.advanceTime(day);
   h.failNextCommit();
-  assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 0, failed: 1, skipped: 0 });
+  await expectedFailure(async () => assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 0, failed: 1, skipped: 0 }));
   assert.equal(h.files.has(ticket.expectedFileId), true);
   assert.equal((await h.repository.transaction(tx => tx.get<{ state: string }>('uploads', ticket.id)))?.state, 'issued');
   assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 1, failed: 0, skipped: 0 });
@@ -64,7 +75,7 @@ test('one storage failure does not stop other cleanup candidates', async () => {
   h.files.put(second.expectedFileId, { bytes: 1024, video: true });
   h.advanceTime(day);
   h.files.failNextRemove();
-  assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 1, failed: 1, skipped: 0 });
+  await expectedFailure(async () => assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 1, failed: 1, skipped: 0 }));
   assert.equal(Number(h.files.has(first.expectedFileId)) + Number(h.files.has(second.expectedFileId)), 1);
   assert.deepEqual(await runMaintenance(h.deps, 100), { removed: 1, failed: 0, skipped: 0 });
 });
@@ -150,6 +161,29 @@ test('maintenance processes at most 100 candidates over query pages', async () =
   h.advanceTime(day);
   assert.deepEqual(await runMaintenance(h.deps, 200), { removed: 100, failed: 0, skipped: 0 });
   assert.deepEqual(await runMaintenance(h.deps, 200), { removed: 15, failed: 0, skipped: 0 });
+});
+
+for (const kind of ['upload', 'record']) test(`competing ${kind} cleanup counts only the winning terminal transition`, async () => {
+  const h = createHarness();
+  if (kind === 'record') {
+    const record = await completeFirstLesson(h);
+    h.files.failNextRemove();
+    await h.apiA.deleteRecord(record.id);
+  } else {
+    await h.apiA.createUpload({ lessonId: 'intro-01', lessonVersion: 1 });
+    h.advanceTime(day);
+  }
+  const gate = deferred<void>(); let entered = 0;
+  const remove = h.files.remove.bind(h.files);
+  h.files.remove = async id => {
+    if (++entered === 2) gate.resolve();
+    await gate.promise;
+    await remove(id);
+  };
+  const results = await Promise.all([runMaintenance(h.deps, 100), runMaintenance(h.deps, 100)]);
+  assert.equal(results.reduce((total, row) => total + row.removed, 0), 1);
+  assert.equal(results.reduce((total, row) => total + row.skipped, 0), 1);
+  assert.equal(results.reduce((total, row) => total + row.failed, 0), 0);
 });
 
 test('SDK cleanup query pages issued, cleaning and deleting candidates without dropping rows', async () => {

@@ -14,6 +14,7 @@ export interface Repository {
 }
 
 export interface FileStore {
+  authorize(ownerId: string, cloudPath: string): Promise<void>;
   inspect(fileId: string): Promise<{ bytes: number; video: boolean }>;
   playback(fileId: string): Promise<{ url: string; expiresAt: number }>;
   remove(fileId: string): Promise<void>;
@@ -67,7 +68,9 @@ export function createRepository(db: ReturnType<typeof import('wx-server-sdk').d
         }
       },
       set: async <T>(collection: string, id: string, value: T) => {
-        await sdkTx.collection(collection).doc(id).set({ data: value as Record<string, unknown> });
+        const data = { ...value } as Record<string, unknown>;
+        delete data._id;
+        await sdkTx.collection(collection).doc(id).set({ data });
       },
       remove: async (collection: string, id: string) => {
         await sdkTx.collection(collection).doc(id).remove();

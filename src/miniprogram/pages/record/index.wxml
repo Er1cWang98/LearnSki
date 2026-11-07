@@ -10,7 +10,7 @@
     <text>视频正在删除，记录已从列表隐藏</text><button class="record-secondary" bindtap="retryDelete">重试处理</button>
   </view>
   <block wx:else>
-    <view class="record-header"><text class="eyebrow">练习记录</text><text class="record-title">{{view.title}}</text><text class="record-meta">{{view.dateText}} · {{view.resultText}}</text></view>
+    <view class="record-header"><text class="eyebrow">练习记录</text><text class="record-title">{{view.title}}</text><text class="record-meta">{{view.dateText}} · {{view.resultText}}</text><text class="record-meta">课程内容版本：{{view.record.lessonVersion}}</text></view>
     <view class="record-section">
       <text class="section-title">练习视频</text>
       <video wx:if="{{view.playbackUrl}}" class="record-video" src="{{view.playbackUrl}}" controls binderror="videoError"></video>

@@ -110,6 +110,7 @@ Page({
   chooseAlbum() { void this.controller?.choose('album'); },
   chooseCamera() { void this.controller?.choose('camera'); },
   cancelUpload() { this.controller?.cancelUpload(); },
+  removeVideo() { this.controller?.removeVideo(); },
   retryUpload() { void this.controller?.retryUpload(); },
   savePractice() { void this.controller?.submit('practicing'); },
   completePractice() { void this.controller?.submit('selfCompleted'); },

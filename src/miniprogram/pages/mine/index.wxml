@@ -22,6 +22,7 @@
     <block wx:else>
       <view class="record-list">
         <button wx:for="{{rows}}" wx:key="id" class="record-row" data-id="{{item.id}}" bindtap="openRecord">
+          <view class="video-placeholder"><text aria-hidden="true">▶</text><text>练习视频</text></view>
           <view class="record-main"><text class="record-title">{{item.title}}</text><text class="record-meta">{{item.dateText}} · {{item.resultText}}</text></view>
           <text class="record-arrow" aria-hidden="true">›</text>
         </button>

@@ -17,6 +17,7 @@
 .record-list { margin-top: 20rpx; border-top: 1rpx solid #d9e2e5; }
 .record-row { display: flex; align-items: center; width: 100%; min-height: 116rpx; padding: 18rpx 0; margin: 0; background: transparent; border-bottom: 1rpx solid #d9e2e5; border-radius: 0; color: #173044; text-align: left; line-height: normal; }
 .record-main { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 8rpx; }
+.video-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; width: 112rpx; height: 88rpx; margin-right: 20rpx; border-radius: 8rpx; background: #e9f0f0; color: #657783; font-size: 20rpx; gap: 6rpx; }
 .record-title { font-size: 29rpx; font-weight: 600; white-space: normal; }
 .record-meta { color: #657783; font-size: 24rpx; }
 .record-arrow { padding-left: 16rpx; color: #82949d; font-size: 38rpx; }

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ServiceDeps } from './repository';
-import { finishDeletion } from './service';
+import { finishDeletionTransition } from './service';
 
 type Upload = { state: 'issued' | 'consumed' | 'cleaning' | 'expired'; expiresAt: number; expectedFileId: string };
 type Practice = { state: 'active' | 'deleting'; ownerId: string };
@@ -24,11 +24,12 @@ async function cleanUpload(deps: ServiceDeps, id: string, now: number): Promise<
   });
   if (!fileId) return 'skipped';
   await deps.files.remove(fileId);
-  await deps.repository.transaction(async tx => {
+  return deps.repository.transaction(async tx => {
     const upload = await tx.get<Upload>('uploads', id);
-    if (upload?.state === 'cleaning') await tx.set('uploads', id, { ...upload, state: 'expired' });
+    if (upload?.state !== 'cleaning') return 'skipped';
+    await tx.set('uploads', id, { ...upload, state: 'expired' });
+    return 'removed';
   });
-  return 'removed';
 }
 
 async function cleanPractice(deps: ServiceDeps, id: string): Promise<'removed' | 'failed' | 'skipped'> {
@@ -37,8 +38,8 @@ async function cleanPractice(deps: ServiceDeps, id: string): Promise<'removed' |
     return practice?.state === 'deleting' ? practice.ownerId : null;
   });
   if (!ownerId) return 'skipped';
-  const result = await finishDeletion(deps, ownerId, id);
-  return result.state === 'deleted' ? 'removed' : 'failed';
+  const result = await finishDeletionTransition(deps, ownerId, id);
+  return result.state === 'deleting' ? 'failed' : result.removed ? 'removed' : 'skipped';
 }
 
 export async function runMaintenance(deps: ServiceDeps, limit: number): Promise<Counts> {

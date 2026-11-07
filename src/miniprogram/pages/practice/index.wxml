@@ -16,6 +16,8 @@
         <text class="section-title">练习视频</text>
         <video wx:if="{{view.state.video}}" class="video-preview" src="{{view.state.video.path}}" controls></video>
         <text wx:elif="{{view.state.uploaded}}" class="uploaded-label">视频已上传</text>
+        <text wx:if="{{view.state.videoExpired}}" class="hint">本机视频已失效，请重新选择视频；心得和自查项已保留</text>
+        <button wx:if="{{(view.state.video || view.state.uploaded) && !view.state.frozen && view.state.phase !== 'submitting'}}" class="link-action" bindtap="removeVideo">移除视频</button>
         <view class="media-actions">
           <button class="secondary" disabled="{{view.busy || view.state.frozen || view.state.needsReconfirmation || view.state.versionBlocked || view.state.error === 'DRAFT_LOAD_FAILED'}}" bindtap="chooseAlbum">从相册选择</button>
           <button class="secondary" disabled="{{view.busy || view.state.frozen || view.state.needsReconfirmation || view.state.versionBlocked || view.state.error === 'DRAFT_LOAD_FAILED'}}" bindtap="chooseCamera">拍摄视频</button>

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import * as cloud from 'wx-server-sdk';
+import cloudbase from '@cloudbase/node-sdk';
 import { createRepository } from './repository';
-import { createFileStore } from './files';
+import { createFileStore, createOwnerAuthorization } from './files';
 import { createService } from './service';
 import type { LearningApi } from '../domain/types';
 
@@ -59,7 +60,7 @@ function fileIdPrefix(prefix: string | undefined, env: string | undefined): stri
   return prefix;
 }
 
-export function createMain(sdk: typeof cloud, environment: NodeJS.ProcessEnv) {
+export function createMain(sdk: typeof cloud, environment: NodeJS.ProcessEnv, authoritySdk = cloudbase) {
   return async (event: unknown): Promise<RpcResponse> => {
     try {
       sdk.init({ env: sdk.DYNAMIC_CURRENT_ENV as unknown as string });
@@ -68,7 +69,8 @@ export function createMain(sdk: typeof cloud, environment: NodeJS.ProcessEnv) {
         forUser(ownerId) {
           const prefix = fileIdPrefix(environment.FILE_ID_PREFIX, identity.ENV);
           return createService({ repository: createRepository(sdk.database()),
-            files: createFileStore(sdk as unknown as Parameters<typeof createFileStore>[0]),
+            files: createFileStore(sdk as unknown as Parameters<typeof createFileStore>[0], undefined, Date.now,
+              createOwnerAuthorization(authoritySdk.init({ env: identity.ENV }))),
             now: Date.now, randomId: randomUUID, fileIdPrefix: prefix }).forUser(ownerId);
         },
       } });

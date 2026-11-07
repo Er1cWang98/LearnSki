@@ -11,6 +11,7 @@ export type PracticeDraft = {
   snapshot: CommitInput | null;
   versionBlocked: boolean;
   needsReconfirmation?: boolean;
+  videoExpired?: boolean;
 };
 
 export type DraftStore = {
@@ -31,7 +32,10 @@ export function createDraftStore(wxApi: typeof wx): DraftStore {
       const draft = scope ? wxApi.getStorageSync(key) as PracticeDraft | undefined : memory.get(key);
       if (!draft || typeof draft !== 'object' || !Array.isArray(draft.checkedIds) || typeof draft.note !== 'string') return null;
       const restored = { ...draft, checkedIds: [...draft.checkedIds] };
-      if (restored.video?.path && !(await hasLocalFile(restored.video.path))) restored.video = null;
+      if (restored.video?.path && !(await hasLocalFile(restored.video.path))) {
+        restored.video = null;
+        restored.videoExpired = true;
+      }
       return restored;
     },
     save(scope, lessonId, draft) {

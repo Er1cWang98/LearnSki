@@ -24,6 +24,7 @@ test('every registered page and cloud function is deployable from the build outp
     const manifest = JSON.parse(await readFile(join(folder, 'package.json'), 'utf8'));
     assert.equal(manifest.main, 'index.js');
     assert.equal(manifest.dependencies['wx-server-sdk'], '4.0.2');
+    assert.equal(manifest.dependencies['@cloudbase/node-sdk'], '3.17.2');
     const probe = spawnSync(process.execPath, ['-e', [
       "const Module = require('node:module');",
       'const load = Module._load;',
@@ -41,8 +42,8 @@ test('client bundle excludes server modules and private configuration', async ()
   const files = await readdir(mini, { recursive: true });
   for (const file of files) {
     assert.doesNotMatch(file, /(?:cloud\.local|database\.rules|storage\.rules|maintenance\.trigger)/);
-    if (!file.endsWith('.js')) continue;
+    if (!/\.(js|json|wxml|wxss)$/.test(file)) continue;
     const contents = await readFile(join(mini, file), 'utf8');
-    assert.doesNotMatch(contents, /node:crypto|wx-server-sdk|FILE_ID_PREFIX|TRIGGER_SRC/);
+    assert.doesNotMatch(contents, /node:crypto|wx-server-sdk|@cloudbase\/node-sdk|FILE_ID_PREFIX|TRIGGER_SRC/);
   }
 });

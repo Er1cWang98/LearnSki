@@ -40,6 +40,8 @@ npm run build
 4. `maintenance/config.json` 已由 `config/maintenance.trigger.json` 复制生成，声明每小时一次的 `cleanup-expired` 定时触发器。部署函数后还须在开发者工具执行独立的 **Upload Trigger / 上传触发器** 操作并核对控制台状态。定时入口要求平台提供 `TRIGGER_SRC=timer`、事件 `Type=Timer` / `TriggerName=cleanup-expired`，且没有用户 `OPENID`；不要手动设置 `TRIGGER_SRC` 来伪造信任，也不要仅发送同形事件作为验证。目标环境的真实事件字段仍待观测。
 5. 使用两个真实测试账号按验收表检查课程解锁、记录所有权、云存储拒绝、上传/播放/删除、过期清理。检查函数日志中清理的 `removed`、`failed`、`skipped` 计数。每轮最多处理 100 项；若最早的失败条目长期占满候选窗口，后续条目可能得不到处理，须监控积压并排查失败原因。
 
+提交前，`learning` 使用显式固定的 `@cloudbase/node-sdk@3.17.2` 检查文件权限：当前 SDK 用户的 `openId` 必须与可信微信调用者相同，再对会话的精确 `cloudPath` 请求 `getFileAuthority` 的 `READ` 权限。只有返回同一路径且 `read === true` 才继续检查文件和提交。此证明依赖存储读取规则始终为 `resource.openid == auth.openid`，不能改成公开读取；`practice/` 前缀本身不证明文件归属。缺失上下文、权限结果缺失/拒绝/路径不符或接口错误都会拒绝提交。部署时必须验证两个 SDK 的真实用户上下文与精确路径返回格式，以及 B 在 A 已分配但未占用的路径创建视频后，A 的提交仍被拒绝；本地 SDK 传输替身测试不等于这些云端检查已经通过。
+
 当前固定的 `wx-server-sdk@4.0.2` 安装树经 `npm ci` 报告 6 项依赖告警（1 moderate、5 high，含 axios 与 lodash 子依赖）。没有经过 SDK 级兼容验证的依赖覆盖未应用；正式部署前需要评估并验证安全更新，同时让两份生成的云函数依赖清单保持一致。`npm audit fix --force` 所建议的 SDK 降级不是已验证的解决办法。
 
 平台资料：CloudBase [存储安全规则](https://docs.cloudbase.net/storage/security-rules)、[定时触发器](https://docs.cloudbase.net/cloud-function/timer-trigger)、[云函数环境变量](https://docs.cloudbase.net/cloud-function/function-configuration/env)、[数据索引](https://docs.cloudbase.net/database/data-index)。这些资料用于指导控制台配置；本仓库的本地构建和测试不代替实际控制台、基础库和真机验收。

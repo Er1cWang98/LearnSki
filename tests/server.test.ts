@@ -4,6 +4,7 @@ import { getLesson } from '../src/catalog/intro';
 import { createRepository } from '../src/server/repository';
 import { finishDeletion } from '../src/server/service';
 import { handleRequest } from '../src/server/entry';
+import { createOwnerAuthorization } from '../src/server/files';
 import { completeFirstLesson, createHarness } from './helpers/fakes';
 import type { CommitInput } from '../src/domain/types';
 
@@ -116,6 +117,27 @@ test('records and playback are private, and deletion preserves completion', asyn
   assert.equal(completion.sourceRecordId, null);
 });
 
+test('correct allocated path uploaded by another creator cannot be committed', async () => {
+  const h = createHarness();
+  const { input } = await ready(h);
+  let checked = false;
+  const path = `practice/user-a/${input.sessionId}/video`;
+  const creators = new Map([[path, 'user-b']]);
+  h.files.authorize = createOwnerAuthorization({
+    auth: () => ({ getUserInfo: () => ({ openId: 'user-a' }) }),
+    getFileAuthority: async ({ fileList }: { fileList: Array<{ path: string; type: string }> }) => {
+      assert.deepEqual(fileList, [{ path, type: 'READ' }]);
+      checked = true;
+      return { data: [{ path, read: creators.get(path) === 'user-a' }] };
+    },
+  } as any);
+  await assert.rejects(h.apiA.commit(input), { code: 'VIDEO_INVALID' });
+  assert.equal(checked, true);
+  assert.equal((await h.apiA.listRecords({ limit: 20 })).totalActive, 0);
+  creators.set(path, 'user-a');
+  assert.equal((await h.apiA.commit(input)).record.id, input.sessionId);
+});
+
 test('records use stable descending cursors and owner-wide active count under lesson filter', async () => {
   const h = createHarness();
   const first = await completeFirstLesson(h);
@@ -132,6 +154,7 @@ test('records use stable descending cursors and owner-wide active count under le
   assert.equal(page1.items.length, 2);
   assert.equal(page2.items.length, 1);
   assert.deepEqual(new Set([...page1.items, ...page2.items].map(item => item.id)), new Set([first.id, second.id, third.id]));
+  assert.deepEqual([...page1.items, ...page2.items].map(item => item.id), [first.id, second.id, third.id].sort().reverse());
   assert.equal(page2.nextCursor, null);
   await assert.rejects(h.apiA.listRecords({ limit: 21 }), { code: 'INVALID_INPUT' });
   await assert.rejects(h.apiA.listRecords({ limit: 1, cursor: Buffer.from(JSON.stringify({ createdAt: 1, id: 'x', ownerId: 'user-b' })).toString('base64') }), { code: 'INVALID_INPUT' });

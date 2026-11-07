@@ -4,9 +4,62 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { createFileStore, readVideoPrefix } from '../src/server/files';
 import { createMain, main } from '../src/server/entry';
+import * as fileAdapters from '../src/server/files';
+import cloudbase from '@cloudbase/node-sdk';
 
 const fileId = 'cloud://env.bucket/practice/a/s1/video';
 const mp4 = Buffer.from('000000186674797069736f6d0000020069736f32', 'hex');
+
+test('file authorization fails closed on absent, denied, mismatched or unavailable proof', async () => {
+  const path = 'practice/a/s1/video';
+  await assert.rejects(createFileStore(cloud()).authorize('a', path), { code: 'VIDEO_INVALID' });
+  for (const data of [undefined, [], [{ path, read: false }], [{ path: 'other', read: true }],
+    [{ path, read: 'true' }], [{ path, read: true }, { path, read: true }]]) {
+    const authorize = (fileAdapters as any).createOwnerAuthorization({ auth: () => ({ getUserInfo: () => ({ openId: 'a' }) }),
+      getFileAuthority: async () => ({ data }) });
+    await assert.rejects(authorize('a', path), { code: 'VIDEO_INVALID' });
+  }
+  for (const openId of ['', 'b']) {
+    const authorize = (fileAdapters as any).createOwnerAuthorization({ auth: () => ({ getUserInfo: () => ({ openId }) }),
+      getFileAuthority: async () => { throw new Error('must not request'); } });
+    await assert.rejects(authorize('a', path), { code: 'VIDEO_INVALID' });
+  }
+  const authorize = (fileAdapters as any).createOwnerAuthorization({ auth: () => ({ getUserInfo: () => ({ openId: 'a' }) }),
+    getFileAuthority: async () => { throw new Error('offline'); } });
+  await assert.rejects(authorize('a', path), { code: 'VIDEO_INVALID' });
+});
+
+test('pinned node SDK authorization uses trusted context, exact READ path and instance environment', async () => {
+  const transport = require('@cloudbase/node-sdk/dist/utils/tcbapirequester');
+  const previousRequest = transport.request;
+  const previousKeys = process.env.WX_CONTEXT_KEYS;
+  const previousOpenid = process.env.WX_OPENID;
+  const previousLogin = process.env.LOGINTYPE;
+  const path = 'practice/a/s1/video';
+  let creator = 'b';
+  const requests: any[] = [];
+  process.env.WX_CONTEXT_KEYS = 'WX_OPENID'; process.env.WX_OPENID = 'a'; process.env.LOGINTYPE = 'WECHAT';
+  transport.request = async (request: any) => {
+    requests.push(request);
+    return { data: [{ path, cosFileId: 'provider-object', read: request.params.openId === creator }] };
+  };
+  try {
+    const app = cloudbase.init({ env: 'test-env' });
+    const authorize = (fileAdapters as any).createOwnerAuthorization(app);
+    await assert.rejects(authorize('a', path), { code: 'VIDEO_INVALID' });
+    creator = 'a';
+    await authorize('a', path);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].config.envName, 'test-env');
+    assert.deepEqual(requests[0].params, { action: 'storage.getFileAuthority', openId: 'a', uid: '',
+      loginType: 'WECHAT', fileList: [{ path, type: 'READ' }] });
+  } finally {
+    transport.request = previousRequest;
+    for (const [key, value] of [['WX_CONTEXT_KEYS', previousKeys], ['WX_OPENID', previousOpenid], ['LOGINTYPE', previousLogin]]) {
+      if (value === undefined) delete process.env[key!]; else process.env[key!] = value;
+    }
+  }
+});
 
 function cloud(status = 0, url = 'https://storage.example/video') {
   return {
@@ -80,7 +133,13 @@ test('remove treats only the known missing-file status as idempotent', async () 
   await assert.rejects(createFileStore(cloud(-503002) as any).remove(fileId));
 });
 
-test('HTTP reader caps bytes and closes the response', async () => {
+test('HTTP reader caps copied bytes and closes the response', async t => {
+  const from = Buffer.from;
+  const copied: number[] = [];
+  t.mock.method(Buffer, 'from', (...args: any[]) => {
+    if (Buffer.isBuffer(args[0])) copied.push(args[0].length);
+    return Reflect.apply(from, Buffer, args);
+  });
   let requestOptions: any;
   const response = new PassThrough() as PassThrough & { statusCode?: number; headers?: Record<string, string> };
   response.statusCode = 200;
@@ -97,6 +156,7 @@ test('HTTP reader caps bytes and closes the response', async () => {
   assert.equal(response.destroyed, true);
   assert.equal(requestOptions.headers.Range, 'bytes=0-63');
   assert.equal(requestOptions.timeout, 10000);
+  assert.ok(copied.every(bytes => bytes <= 64), `copied oversized chunks: ${copied}`);
 });
 
 test('HTTP reader rejects redirects without following them', async () => {
@@ -124,11 +184,15 @@ test('production handler initializes current environment and uses trusted OpenID
     getWXContext() { return { OPENID: 'trusted-user', ENV: 'test-env' }; },
     database() { return { collection() { return query; } }; },
     getTempFileURL: cloud().getTempFileURL, deleteFile: cloud().deleteFile };
-  const handler = createMain(sdk as any, { FILE_ID_PREFIX: 'cloud://test-env.bucket' });
+  const initialized: unknown[] = [];
+  const handler = createMain(sdk as any, { FILE_ID_PREFIX: 'cloud://test-env.bucket' }, {
+    ...cloudbase, init(options) { initialized.push(options); return cloudbase.init(options); },
+  });
   const result = await handler({ action: 'getProgress', input: { ownerId: 'attacker' } });
   assert.equal(result.ok, true);
   if (result.ok) assert.equal((result.data as any).progress.requiredDone, 0);
   assert.deepEqual(calls, [{ env: marker }]);
+  assert.deepEqual(initialized, [{ env: 'test-env' }]);
   assert.equal(typeof main, 'function');
 });
 

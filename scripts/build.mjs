@@ -74,14 +74,14 @@ for (const [name, entry] of [
     platform: 'node',
     target: 'node18',
     format: 'cjs',
-    external: ['wx-server-sdk'],
+    external: ['wx-server-sdk', '@cloudbase/node-sdk'],
   });
   await writeFile(join(output, 'package.json'), JSON.stringify({
     name: `learnski-${name}`,
     version: '0.1.0',
     private: true,
     main: 'index.js',
-    dependencies: { 'wx-server-sdk': '4.0.2' },
+    dependencies: { 'wx-server-sdk': '4.0.2', '@cloudbase/node-sdk': '3.17.2' },
   }, null, 2) + '\n');
   if (name === 'maintenance')
     await cp(join(root, 'config', 'maintenance.trigger.json'), join(output, 'config.json'));

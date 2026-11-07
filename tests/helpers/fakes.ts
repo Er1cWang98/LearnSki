@@ -86,6 +86,7 @@ export class MemoryRepository implements Repository {
 }
 
 export class MemoryFiles implements FileStore {
+  async authorize(_ownerId: string, _cloudPath: string): Promise<void> {}
   private stored = new Map<string, { bytes: number; video: boolean }>();
   private failRemoveOnce = false;
   inspectFailure: Error | null = null;

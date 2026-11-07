@@ -46,6 +46,11 @@ function ownedRecord(record: StoredPractice | null, ownerId: string): StoredPrac
 }
 
 export async function finishDeletion(deps: ServiceDeps, ownerId: string, recordId: string): Promise<{ state: 'deleted' | 'deleting' }> {
+  const { state } = await finishDeletionTransition(deps, ownerId, recordId);
+  return { state };
+}
+
+export async function finishDeletionTransition(deps: ServiceDeps, ownerId: string, recordId: string): Promise<{ state: 'deleted' | 'deleting'; removed: boolean }> {
   const record = await deps.repository.transaction(async tx => {
     const current = await tx.get<StoredPractice>('practices', recordId);
     if (current?.ownerId === ownerId && current.state === 'deleting') return current;
@@ -55,19 +60,20 @@ export async function finishDeletion(deps: ServiceDeps, ownerId: string, recordI
       return null;
     return error('NOT_FOUND', '练习记录不存在');
   });
-  if (!record) return { state: 'deleted' };
+  if (!record) return { state: 'deleted', removed: false };
   try { await deps.files.remove(record.videoFileId); }
-  catch { return { state: 'deleting' }; }
-  await deps.repository.transaction(async tx => {
+  catch { return { state: 'deleting', removed: false }; }
+  const removed = await deps.repository.transaction(async tx => {
     const current = await tx.get<StoredPractice>('practices', recordId);
-    if (!current || current.ownerId !== ownerId || current.state !== 'deleting') return;
+    if (!current || current.ownerId !== ownerId || current.state !== 'deleting') return false;
     const completionKey = completionId(ownerId, current.lessonId);
     const completion = await tx.get<StoredCompletion>('completions', completionKey);
     if (completion?.ownerId === ownerId && completion.sourceRecordId === recordId)
       await tx.set('completions', completionKey, { ...completion, sourceRecordId: null });
     await tx.remove('practices', recordId);
+    return true;
   });
-  return { state: 'deleted' };
+  return { state: 'deleted', removed };
 }
 
 export function createService(deps: ServiceDeps): { forUser(ownerId: string): LearningApi } {
@@ -140,9 +146,10 @@ export function createService(deps: ServiceDeps): { forUser(ownerId: string): Le
             validateCommit(lesson, input);
             if (input.fileId !== session.expectedFileId) error('INVALID_INPUT', '视频与上传会话不匹配');
             if (deps.now() >= session.expiresAt) error('UPLOAD_EXPIRED', '上传会话已过期');
-            return { record: null };
+            return { record: null, cloudPath: session.cloudPath };
           });
           if (initial.record) return { record: publicRecord(initial.record), progress: (await progress()).progress };
+          await deps.files.authorize(ownerId, initial.cloudPath!);
           const media = await deps.files.inspect(input.fileId);
           if (!media || !media.video || !Number.isFinite(media.bytes) || media.bytes < 1 || media.bytes > maxBytes)
             error('VIDEO_INVALID', '视频无效或超过大小限制');

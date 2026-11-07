@@ -17,6 +17,10 @@ type PageInstance = PageDefinition & { setData(data: Record<string, unknown>): v
 test('record page keeps pending deletion across hide/show and clears it on account change', async () => {
   const h = createHarness();
   const record = await completeFirstLesson(h);
+  await h.repository.transaction(async tx => {
+    const stored = await tx.get<Record<string, unknown>>('practices', record.id);
+    await tx.set('practices', record.id, { ...stored, lessonVersion: 7 });
+  });
   const previousPage = (globalThis as { Page?: unknown }).Page;
   const previousWx = (globalThis as { wx?: unknown }).wx;
   const previousEnv = (globalThis as { __CLOUD_ENV_ID__?: unknown }).__CLOUD_ENV_ID__;
@@ -52,6 +56,7 @@ test('record page keeps pending deletion across hide/show and clears it on accou
     page.onLoad.call(page, { id: record.id });
     await page.onShow.call(page);
     assert.equal(page.data.view.phase, 'ready');
+    assert.equal(page.data.view.record?.lessonVersion, 7);
     h.files.removeFailure = new Error('storage offline');
     assert.deepEqual(await page.controller!.remove(), { state: 'deleting' });
     assert.equal(page.data.view.phase, 'deleting');

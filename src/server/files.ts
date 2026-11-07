@@ -14,6 +14,21 @@ const missingStatus = -503003;
 const supported = new Set(['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'M4V ', 'qt  ']);
 const failure = (code: string): Error => Object.assign(new Error(code), { code });
 
+type FileAuthority = Pick<import('@cloudbase/node-sdk').CloudBase, 'auth' | 'getFileAuthority'>;
+
+// Under the deployed owner-only read rule, READ permission proves the current
+// trusted caller owns this object. A path prefix alone cannot establish this.
+export function createOwnerAuthorization(sdk: FileAuthority): FileStore['authorize'] {
+  return async (ownerId, cloudPath) => {
+    try {
+      if (!ownerId || sdk.auth().getUserInfo().openId !== ownerId) throw failure('VIDEO_INVALID');
+      const result = await sdk.getFileAuthority({ fileList: [{ path: cloudPath, type: 'READ' }] });
+      if (!Array.isArray(result?.data) || result.data.length !== 1 ||
+        result.data[0]?.path !== cloudPath || result.data[0]?.read !== true) throw failure('VIDEO_INVALID');
+    } catch { throw failure('VIDEO_INVALID'); }
+  };
+}
+
 function secureUrl(raw: string): boolean {
   try { return new URL(raw).protocol === 'https:'; } catch { return false; }
 }
@@ -45,7 +60,7 @@ export function readVideoPrefix(url: string, get: typeof https.get = https.get):
         const chunks: Buffer[] = [];
         let length = 0;
         response.on('data', (chunk: Buffer) => {
-          const part = Buffer.from(chunk).subarray(0, 64 - length);
+          const part = Buffer.from(chunk.subarray(0, 64 - length));
           chunks.push(part);
           length += part.length;
           if (length >= 64) {
@@ -88,7 +103,8 @@ function isMp4(prefix: Buffer): boolean {
 }
 
 export function createFileStore(cloud: CloudStorage, request: (url: string) => Promise<Response> = readVideoPrefix,
-  now: () => number = Date.now): FileStore {
+  now: () => number = Date.now,
+  authorize: FileStore['authorize'] = async () => { throw failure('VIDEO_INVALID'); }): FileStore {
   async function temporary(fileId: string, maxAge: number) {
     const result = await cloud.getTempFileURL({ fileList: [{ fileID: fileId, maxAge }] });
     const item = result.fileList?.[0];
@@ -96,6 +112,7 @@ export function createFileStore(cloud: CloudStorage, request: (url: string) => P
     return item;
   }
   return {
+    authorize,
     async inspect(fileId) {
       const item = await temporary(fileId, 300);
       if (item.status === missingStatus) throw failure('VIDEO_REQUIRED');
