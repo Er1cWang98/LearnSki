@@ -72,6 +72,33 @@ test('每课有可用且稳定的考核 ID，合并课程覆盖前后刃', () =>
   }
 });
 
+test('考核 ID 与持久记录约定一致', () => {
+  const expectedIds: Record<string, string[]> = {
+    'intro-01': ['intro-01-name', 'intro-01-check'],
+    'intro-02': ['intro-02-balance', 'intro-02-gaze'],
+    'intro-03': ['intro-03-observe', 'intro-03-guided-rise'],
+    'intro-04': ['intro-04-start', 'intro-04-stop'],
+    'intro-05': ['intro-05-route', 'intro-05-pause'],
+    'intro-06': ['intro-06-route', 'intro-06-stop'],
+    'intro-07': ['intro-07-toe', 'intro-07-heel'],
+    'intro-08': ['intro-08-toe', 'intro-08-heel'],
+    'intro-09': ['intro-09-turn', 'intro-09-finish'],
+    'intro-10': ['intro-10-turn', 'intro-10-stop'],
+    'intro-11': ['intro-11-link', 'intro-11-edge'],
+  };
+  for (const [lessonId, ids] of Object.entries(expectedIds)) {
+    assert.deepEqual(getLesson(lessonId).criteria.map(criterion => criterion.id), ids);
+  }
+});
+
+test('单脚带板滑行分别讲解并考核前后刃侧蹬滑', () => {
+  const lesson = getLesson('intro-04');
+  for (const edge of ['前刃', '后刃']) {
+    assert.ok(lesson.steps.some(step => step.includes(edge)), `${edge} must be taught`);
+    assert.ok(lesson.criteria.some(criterion => criterion.text.includes(edge)), `${edge} must be assessed`);
+  }
+});
+
 test('课程是待审核草稿且不展示虚构媒体', () => {
   for (const lesson of lessons) {
     assert.equal(lesson.reviewStatus, 'draft');
